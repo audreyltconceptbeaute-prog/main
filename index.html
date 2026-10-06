@@ -1,0 +1,1648 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Gestion de Stock</title>
+<script src="https://unpkg.com/@zxing/library@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; height: 100dvh; overflow: hidden; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f2f2f7; margin: 0; padding: 6px; color: #1c1c1e; display: flex; flex-direction: column; }
+  h1 { font-size: 15px; text-align: center; margin: 0 0 4px 0; flex-shrink: 0; }
+  h2 { font-size: 14px; margin: 0 0 4px 0; }
+  .muted { color: #8e8e93; font-size: 11px; }
+
+  #main-content { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+  /* Nav bar */
+  .nav-bar { display: flex; background: #fff; border-radius: 14px; padding: 4px; flex-shrink: 0; margin-top: 4px; gap: 4px; box-shadow: 0 -2px 10px rgba(0,0,0,0.06); padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+  .nav-btn { flex: 1; border: none; background: transparent; padding: 6px 2px; font-size: 10px; font-weight: 700; border-radius: 10px; color: #8e8e93; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; transition: all 0.15s; }
+  .nav-btn .ic { font-size: 17px; }
+  .nav-btn[data-mode="sortie"].active    { background: #ff3b30; color: #fff; transform: translateY(-2px); box-shadow: 0 3px 8px rgba(255,59,48,0.4); }
+  .nav-btn[data-mode="stock"].active     { background: #007aff; color: #fff; transform: translateY(-2px); box-shadow: 0 3px 8px rgba(0,122,255,0.4); }
+  .nav-btn[data-mode="commande"].active  { background: #ff9500; color: #fff; transform: translateY(-2px); box-shadow: 0 3px 8px rgba(255,149,0,0.4); }
+  .nav-btn[data-mode="analyse"].active   { background: #5856d6; color: #fff; transform: translateY(-2px); box-shadow: 0 3px 8px rgba(88,86,214,0.4); }
+  .nav-btn[data-mode="entree"].active    { background: #34c759; color: #fff; transform: translateY(-2px); box-shadow: 0 3px 8px rgba(52,199,89,0.4); }
+  .nav-btn[data-mode="reception"].active { background: #af52de; color: #fff; transform: translateY(-2px); box-shadow: 0 3px 8px rgba(175,82,222,0.4); }
+
+  /* Adaptation stricte du mode stock sans scrollbar horizontale */
+  #view-stock table {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  #view-stock th, #view-stock td {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    padding: 4px 2px;
+    font-size: 11px;
+  }
+
+  #view-stock th:nth-child(1), #view-stock td:nth-child(1) { width: 32%; } 
+  #view-stock th:nth-child(2), #view-stock td:nth-child(2) { width: 18%; } 
+  #view-stock th:nth-child(3), #view-stock td:nth-child(3) { width: 20%; } 
+  #view-stock th:nth-child(4), #view-stock td:nth-child(4) { width: 10%; } 
+  #view-stock th:nth-child(5), #view-stock td:nth-child(5) { width: 12%; } 
+  #view-stock th:nth-child(6), #view-stock td:nth-child(6) { width: 8%; text-align: center; } 
+
+  /* Scanner */
+  .scanner-section { flex-shrink: 0; display: flex; flex-direction: column; }
+  .mode-label { text-align: center; font-weight: 700; font-size: 13px; margin-bottom: 4px; color: #34c759; }
+  .scanner-section.mode-sortie .mode-label { color: #ff3b30; }
+  .scanner-section.mode-reception .mode-label { color: #af52de; }
+  #camera-select { display: none; width: 100%; padding: 6px; border-radius: 8px; border: 1px solid #c6c6c8; font-size: 13px; margin-bottom: 4px; background: #fff; outline: none; }
+  #video-container { width: 100%; height: 20vh; border-radius: 12px; overflow: hidden; background-color: #000; margin-bottom: 4px; position: relative; }
+  video { width: 100%; height: 100%; display: block; object-fit: cover; }
+  #flash-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; opacity: 0; pointer-events: none; transition: opacity 0.3s ease-out; z-index: 10; }
+  #flash-overlay.flash-active { opacity: 0.9; transition: none; }
+  .scan-guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 95%; height: 85%; border: 2px solid #34c759; border-radius: 8px; box-shadow: 0 0 0 2000px rgba(0,0,0,0.4); pointer-events: none; z-index: 5; }
+  .scanner-section.mode-sortie .scan-guide { border-color: #ff3b30; }
+  .scanner-section.mode-reception .scan-guide { border-color: #af52de; }
+  #flash-msg { text-align: center; font-weight: bold; color: #34c759; height: 16px; font-size: 12px; }
+  .manual-row { display: flex; gap: 6px; margin-bottom: 6px; }
+  .manual-row input { flex: 1; padding: 6px 8px; border-radius: 8px; border: 1px solid #c6c6c8; font-size: 13px; }
+  .manual-row button { padding: 6px 12px; border-radius: 8px; border: none; background: #007aff; color: #fff; font-weight: 600; font-size: 12px; }
+
+  /* Vues & Tableaux */
+  .view { flex: 1; min-height: 0; display: none; flex-direction: column; overflow: hidden; position: relative; }
+  .stock-container { background: white; border-radius: 12px; padding: 8px 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+  .table-scroll { overflow-y: auto; flex: 1; min-height: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 4px 6px; text-align: left; border-bottom: 1px solid #e5e5ea; font-size: 11px; vertical-align: middle; }
+  th { font-weight: 600; color: #8e8e93; font-size: 11px; position: sticky; top: 0; background: white; z-index: 1; }
+  .row-alert { background: #fff2ef; }
+  .btn-small { padding: 4px 6px; border-radius: 6px; border: none; font-size: 10px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn-green { background: #34c759; color: #fff; }
+  .btn-red { background: #ff3b30; color: #fff; }
+  .btn-ghost { background: #e5e5ea; color: #1c1c1e; }
+  .btn-primary { background: #007aff; color: #fff; padding: 8px; border-radius: 8px; border: none; font-weight: 600; font-size: 13px; flex: 1; }
+  .btn-secondary { background: #e5e5ea; color: #1c1c1e; padding: 8px; border-radius: 8px; border: none; font-weight: 600; font-size: 13px; flex: 1; }
+
+  /* Stock & Summary */
+  .stock-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px; }
+  .stock-summary { display: flex; justify-content: space-between; background: #f2f2f7; border: 1px solid #e5e5ea; padding: 6px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #1c1c1e; margin-bottom: 6px; flex-shrink: 0; }
+  
+  /* Badge Notification Stock */
+  .badge-commande { background: #fff3cd; color: #856404; font-size: 9px; padding: 1px 4px; border-radius: 4px; border: 1px solid #ffeeba; display: inline-block; margin-top: 1px; font-weight: 600; }
+
+  /* Commandes */
+  #view-commande .stock-container { overflow-y: auto; }
+  .fournisseur-bar { display: flex; justify-content: space-between; align-items: center; background: #fff7ec; border: 1px solid #ffe2b3; border-radius: 10px; padding: 6px 8px; margin-bottom: 8px; font-size: 11px; }
+  fieldset { border: 1px solid #e5e5ea; border-radius: 8px; margin: 0 0 8px 0; padding: 6px 8px; }
+  legend { font-size: 11px; font-weight: 700; color: #3c3c43; padding: 0 4px; display: flex; justify-content: space-between; align-items: center; width: 100%; }
+  .field-row { display: flex; gap: 6px; margin-bottom: 4px; }
+  .field-row > div { flex: 1; }
+  label { display: block; font-size: 10px; color: #8e8e93; margin-bottom: 2px; }
+  input[type="text"], input[type="number"], select { width: 100%; padding: 5px 7px; border-radius: 6px; border: 1px solid #c6c6c8; font-size: 12px; }
+  .qty-input { width: 50px; }
+  .panier-total-row { display: flex; justify-content: space-between; font-weight: 700; padding: 6px 0; font-size: 12px; }
+  .send-row button { width: 100%; padding: 10px; border-radius: 8px; border: none; background: #34c759; color: #fff; font-weight: 700; font-size: 13px; }
+  .send-row button:disabled { background: #c6c6c8; }
+
+  /* Réception (Liste cliquable) */
+  .cmd-card-item { background: #f8f9fa; border: 1px solid #dcdce1; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; transition: all 0.2s; }
+  .cmd-card-item:hover { background: #f1f1f5; border-color: #af52de; }
+  .cmd-card-item.selected { background: #f3e8ff; border-color: #af52de; box-shadow: 0 0 0 1px #af52de; }
+
+  /* Analyses */
+  .analyse-toolbar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-shrink: 0; }
+  .analyse-toolbar select { width: auto; font-size: 11px; padding: 4px; }
+  #conso-chart-wrap { display: block; background: #f8f8fa; border-radius: 8px; padding: 4px; margin-bottom: 6px; height: 120px; flex-shrink: 0; position: relative; width: 100%; }
+  #conso-chart-title { font-size: 11px; font-weight: 700; margin: 0 0 2px 0; color: #3c3c43; text-align: center; }
+
+  /* Calendrier de consommation */
+  .calendar-legend { font-size: 10px; color: #8e8e93; margin-bottom: 6px; line-height: 1.4; }
+  .calendar-toolbar { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .calendar-toolbar select { width: auto; font-size: 11px; padding: 4px; }
+  .calendar-toolbar input { flex: 1; padding: 5px 8px; font-size: 11px; border-radius: 8px; border: 1px solid #c6c6c8; }
+  .calendar-total-global { background: #f2f2f7; border: 1px solid #e5e5ea; border-radius: 6px; padding: 6px 8px; font-size: 11px; font-weight: 700; margin-bottom: 6px; text-align: center; }
+  .calendar-scroll { overflow: auto; flex: 1; min-height: 0; }
+  table.calendar-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .calendar-table th, .calendar-table td { text-align: center; font-size: 9px; padding: 3px 1px; border-bottom: 1px solid #f0f0f2; white-space: nowrap; }
+  .calendar-table th { position: sticky; top: 0; background: #fff; z-index: 2; color: #8e8e93; font-weight: 700; }
+  .calendar-table th:first-child, .calendar-table td:first-child { position: sticky; left: 0; background: #fff; z-index: 1; text-align: left; font-size: 10px; padding-left: 2px; width: 78px; max-width: 78px; overflow: hidden; text-overflow: ellipsis; }
+  .calendar-table th:nth-child(2), .calendar-table td:nth-child(2) { position: sticky; left: 78px; background: #fff; z-index: 1; font-weight: 700; width: 30px; }
+  .calendar-table th:first-child { z-index: 3; }
+  .calendar-table td:first-child { z-index: 1; }
+  .calendar-delta-up { color: #ff3b30; font-size: 8px; display: block; }
+  .calendar-delta-down { color: #34c759; font-size: 8px; display: block; }
+
+  /* Modales, Toast, Loading */
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+  .modal-overlay.show { display: flex; }
+  .modal-card { background: #fff; border-radius: 12px; padding: 12px; width: 100%; max-width: 360px; max-height: 90vh; overflow-y: auto; }
+  .modal-card h3 { margin: 0 0 6px 0; font-size: 14px; }
+  .modal-card-large { max-width: 440px; }
+  .modal-actions { display: flex; gap: 6px; margin-top: 10px; }
+  #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1c1c1e; color: #fff; padding: 8px 14px; border-radius: 16px; font-size: 12px; opacity: 0; transition: all 0.25s; z-index: 200; max-width: 90vw; text-align: center; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #loading-bar { position: fixed; top: 0; left: 0; height: 3px; width: 100%; background: #007aff; transform: scaleX(0); transform-origin: left; transition: transform 0.2s; z-index: 300; }
+  #loading-bar.show { animation: loading-anim 1s infinite; }
+  @keyframes loading-anim { 0%{transform:scaleX(0);} 50%{transform:scaleX(0.7);} 100%{transform:scaleX(1);} }
+
+  /* Écrans de chargement par vue */
+  .view-loading-overlay { display: none; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.85); z-index: 50; align-items: center; justify-content: center; flex-direction: column; border-radius: 12px; backdrop-filter: blur(2px); }
+  .view-loading-overlay.show { display: flex; }
+  .loading-spinner { width: 32px; height: 32px; border: 3px solid #e5e5ea; border-top-color: #007aff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 8px; }
+  .loading-text { font-size: 12px; font-weight: 600; color: #1c1c1e; }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="loading-bar"></div>
+<h1>📦 Gestion de Stock</h1>
+
+<div id="main-content">
+  <!-- Scanner -->
+  <div class="scanner-section" id="scanner-section">
+    <div class="mode-label" id="scanner-mode-label">Mode Entrée</div>
+    <select id="camera-select" onchange="changeCamera()"></select> 
+    <div id="video-container">
+      <video id="video" playsinline autoplay muted></video>
+      <div class="scan-guide" id="scan-guide"></div>
+      <div id="flash-overlay"></div>
+    </div>
+    <div id="flash-msg"></div>
+    <div class="manual-row">
+      <input type="text" id="manual-code" placeholder="Code illisible ? Saisir manuellement">
+      <button onclick="manualSubmit()">Valider</button>
+    </div>
+  </div>
+  <div id="scanner-anchor" style="display:none;"></div>
+
+  <!-- Vue Sortie -->
+  <div class="view" id="view-sortie">
+    <div class="view-loading-overlay"><div class="loading-spinner"></div><div class="loading-text">Chargement des données...</div></div>
+    <div class="stock-container">
+      <h2>Historique des sorties</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Date</th><th>Article</th><th>Qté</th><th>Stock après</th><th>Actions</th></tr></thead>
+          <tbody id="sortie-histo-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vue Stock -->
+  <div class="view" id="view-stock">
+    <div class="view-loading-overlay"><div class="loading-spinner"></div><div class="loading-text">Chargement des données...</div></div>
+    <div class="stock-container">
+      <div class="stock-header-row">
+        <h2>Stock global</h2>
+        <div style="display:flex; gap:4px;">
+          <button class="btn-small btn-ghost" onclick="openCalendrierConso()">📅</button>
+          <button class="btn-small btn-green" onclick="openModalNouveau(null)">+ Nouvel article</button>
+        </div>
+      </div>
+      <input type="text" id="stock-search" placeholder="Rechercher (nom ou code)..." oninput="renderStock()" style="margin-bottom:6px; padding: 4px 8px; font-size: 11px;">
+      <div class="stock-summary" id="stock-summary">
+        <span>Quantité totale : <span id="tot-qty">0</span></span>
+        <span>Valeur : <span id="tot-val">0.00 € TTC</span></span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Article</th><th>Qté/Val</th><th>Fournisseur</th><th>Seuil</th><th>Prix.U</th><th></th></tr></thead>
+          <tbody id="stock-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vue Commande -->
+  <div class="view" id="view-commande">
+    <div class="view-loading-overlay"><div class="loading-spinner"></div><div class="loading-text">Chargement des données...</div></div>
+    <div class="stock-container">
+      <div class="fournisseur-bar" style="flex-direction: column; align-items: stretch; gap: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-weight: 700;">Gestion du Fournisseur</span>
+          <button class="btn-small btn-ghost" onclick="showModal('modal-reglages')">⚙ Réglages Entête</button>
+        </div>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <select id="cmd-select-frs" style="flex: 1;" onchange="selectionnerFournisseurCommande(this.value)">
+            <option value="">-- Choisir un fournisseur --</option>
+          </select>
+          <button class="btn-small btn-green" onclick="ouvrirModalNouveauFournisseur()">+ Ajouter</button>
+        </div>
+        <div style="display: flex; gap: 4px; justify-content: space-between;">
+          <button class="btn-small btn-orange" style="flex:1; background:#ff9500; color:#fff;" onclick="ouvrirModalModifierFournisseur()">✏️ Modifier</button>
+          <button class="btn-small btn-blue" style="flex:1; background:#007aff; color:#fff;" onclick="ouvrirModalSwitchFournisseur()">🔄 Remplacer</button>
+          <button class="btn-small btn-red" style="flex:1;" onclick="supprimerFournisseurActuelCommande()">Supprimer</button>
+        </div>
+        <div class="muted" id="frs-info-details" style="font-size: 10px;">Email : non configuré | Franco : 0.00 € | Délai : 7j</div>
+      </div>
+      
+      <fieldset id="brouillons-section" style="display:none;">
+        <legend>Brouillons sauvegardés</legend>
+        <table>
+          <tbody id="brouillons-body"></tbody>
+        </table>
+      </fieldset>
+
+      <fieldset>
+        <legend>Suggestions (sous le seuil critique)</legend>
+        <table>
+          <thead><tr><th>Article</th><th>Qté</th><th></th></tr></thead>
+          <tbody id="suggestions-body"></tbody>
+        </table>
+      </fieldset>
+      <fieldset>
+        <legend>Ajout manuel</legend>
+        <div class="field-row">
+          <div style="flex:2"><label>Article</label><select id="manual-select"></select></div>
+          <div><label>Qté</label><input type="number" id="manual-qty" min="1" value="1"></div>
+        </div>
+        <button class="btn-small btn-green" onclick="addManualToPanier()">Ajouter au panier</button>
+      </fieldset>
+      <fieldset>
+        <legend>
+          Panier
+          <button class="btn-small btn-ghost" onclick="sauvegarderBrouillon()" style="margin-left:auto;">💾 Sauvegarder (brouillon)</button>
+        </legend>
+        <table>
+          <thead><tr><th>Article</th><th>Qté</th><th>Total</th><th></th></tr></thead>
+          <tbody id="panier-body"></tbody>
+        </table>
+        <div class="panier-total-row"><span>Total</span><span id="panier-total">0.00 € TTC</span></div>
+      </fieldset>
+      <div class="send-row">
+        <button id="send-btn" onclick="envoyerCommande()">Envoyer la commande (PDF par email)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vue Réception -->
+  <div class="view" id="view-reception">
+    <div class="view-loading-overlay"><div class="loading-spinner"></div><div class="loading-text">Chargement des données...</div></div>
+    <div class="stock-container">
+      <h2>Réception de commande</h2>
+      <p class="muted" style="margin-top:0;">Sélectionnez une commande pour l'ouvrir en mode scan :</p>
+      <div id="commandes-cards-container" style="flex-grow:1; overflow-y: auto;"></div>
+    </div>
+  </div>
+
+  <!-- Vue Analyse -->
+  <div class="view" id="view-analyse">
+    <div class="view-loading-overlay"><div class="loading-spinner"></div><div class="loading-text">Chargement des données...</div></div>
+    <div class="stock-container">
+      <div class="stock-header-row">
+        <h2 style="margin:0;">Analyse de consommation (12 derniers mois)</h2>
+        <button class="btn-small btn-ghost" onclick="showModal('modal-info-analyse')">ℹ️ Info</button>
+      </div>
+      <div class="analyse-toolbar">
+        <div>
+          <label style="display:inline-block; font-size:10px;">Stock sécurité :</label>
+          <select id="analyse-couverture" onchange="sauvegarderEtRendreAnalyse()">
+            <option value="1">1 sem extra</option>
+            <option value="2" selected>2 sem extra</option>
+            <option value="3">3 sem extra</option>
+            <option value="4">1 mois extra</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:inline-block; font-size:10px;">Marge :</label>
+          <select id="analyse-marge" onchange="sauvegarderEtRendreAnalyse()">
+            <option value="1.0">0%</option>
+            <option value="1.1">10%</option>
+            <option value="1.2" selected>20%</option>
+            <option value="1.3">30%</option>
+            <option value="1.5">50%</option>
+          </select>
+        </div>
+      </div>
+      <div id="conso-chart-wrap">
+        <div id="conso-chart-title">Top Consommation (12 derniers mois)</div>
+        <canvas id="conso-chart"></canvas>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Article</th><th>Stock & Vitesse</th><th>Seuil</th><th>Action</th></tr></thead>
+          <tbody id="analyse-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vue Entrée -->
+  <div class="view" id="view-entree">
+    <div class="view-loading-overlay"><div class="loading-spinner"></div><div class="loading-text">Chargement des données...</div></div>
+    <div class="stock-container">
+      <h2>Historique des entrées</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Date</th><th>Article</th><th>Qté</th><th>Stock après</th><th>Actions</th></tr></thead>
+          <tbody id="entree-histo-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Nav bar -->
+<div class="nav-bar">
+  <button class="nav-btn" data-mode="sortie" onclick="switchMode('sortie')"><span class="ic">📤</span>Sortie</button>
+  <button class="nav-btn" data-mode="stock" onclick="switchMode('stock')"><span class="ic">📊</span>Stock</button>
+  <button class="nav-btn" data-mode="commande" onclick="switchMode('commande')"><span class="ic">🧾</span>Commande</button>
+  <button class="nav-btn" data-mode="reception" onclick="switchMode('reception')"><span class="ic">📥</span>Réception</button>
+  <button class="nav-btn" data-mode="analyse" onclick="switchMode('analyse')"><span class="ic">📈</span>Analyse</button>
+  <button class="nav-btn" data-mode="entree" onclick="switchMode('entree')"><span class="ic">📥</span>Entrée</button>
+</div>
+
+<!-- Modales -->
+<div class="modal-overlay" id="modal-edit-histo">
+  <div class="modal-card">
+    <h3>Modifier la quantité</h3>
+    <p id="edit-histo-designation" style="font-weight: bold; margin-bottom: 4px;"></p>
+    <p class="muted" id="edit-histo-info" style="margin-top: 0;"></p>
+    <input type="hidden" id="edit-histo-id">
+    <label>Nouvelle quantité du mouvement :</label>
+    <input type="number" id="edit-histo-qte" min="1" value="1">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-edit-histo')">Annuler</button>
+      <button class="btn-primary" onclick="submitEditHisto()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-nouveau">
+  <div class="modal-card">
+    <h3>Nouvel article</h3>
+    <label>Code barre</label><input type="text" id="new-code" placeholder="Saisir ou scanner un code">
+    <label>Désignation</label><input type="text" id="new-designation" placeholder="Nom du produit">
+    <label>Quantité initiale</label><input type="number" id="new-qte" min="0" value="0">
+    <label>Prix d'achat (€ TTC)</label><input type="number" id="new-prix" min="0" step="0.01" value="0">
+    <label>Fournisseur associé</label>
+    <select id="new-fournisseur"></select>
+    <label>Contenance</label><input type="text" id="new-contenance" placeholder="ex: carton de 12">
+    <label>Seuil critique</label><input type="number" id="new-seuil" min="0" value="0">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-nouveau')">Annuler</button>
+      <button class="btn-primary" onclick="submitNouveau()">Créer la fiche</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-ajust">
+  <div class="modal-card">
+    <h3>Modifier l'article</h3>
+    <p id="adj-info" class="muted"></p>
+    <label>Nouvelle quantité</label><input type="number" id="adj-qty" min="0">
+    <label>Prix d'achat (€ TTC)</label><input type="number" id="adj-prix" min="0" step="0.01">
+    <label>Fournisseur associé</label>
+    <select id="adj-fournisseur"></select>
+    <label>Seuil critique</label><input type="number" id="adj-seuil" min="0">
+    <label>Motif de l'ajustement</label><input type="text" id="adj-comment" placeholder="ex: inventaire physique...">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-ajust')">Annuler</button>
+      <button class="btn-primary" onclick="submitAjust()">Valider</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-reglages">
+  <div class="modal-card">
+    <h3>Réglages commande</h3>
+    <fieldset>
+      <legend>Mes coordonnées (entête)</legend>
+      <label>Nom entreprise</label><input type="text" id="cfg-nom">
+      <div class="field-row">
+        <div><label>Représenté par</label><input type="text" id="cfg-representant"></div>
+        <div><label>SIRET</label><input type="text" id="cfg-siret"></div>
+      </div>
+      <label>Adresse</label><input type="text" id="cfg-adresse">
+      <div class="field-row">
+        <div><label>Email</label><input type="text" id="cfg-mail"></div>
+        <div><label>Téléphone</label><input type="text" id="cfg-tel"></div>
+      </div>
+    </fieldset>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-reglages')">Fermer</button>
+      <button class="btn-primary" onclick="submitReglages()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-nouveau-frs">
+  <div class="modal-card">
+    <h3 id="frs-modal-title">Fournisseur</h3>
+    <input type="hidden" id="edit-frs-mode" value="create">
+    <label>Nom du fournisseur</label><input type="text" id="new-frs-nom" placeholder="Nom de l'entreprise">
+    <label>Email de commande</label><input type="text" id="new-frs-mail" placeholder="email@fournisseur.com">
+    <label>Franco de port (€ TTC)</label><input type="number" id="new-frs-franco" min="0" step="0.01" value="0">
+    <label>Délai de livraison habituel (en jours)</label><input type="number" id="new-frs-delai" min="1" value="7" placeholder="ex: 3 pour 3 jours, 7 pour 1 semaine">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-nouveau-frs')">Annuler</button>
+      <button class="btn-primary" onclick="submitNouveauFournisseurRapide()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-switch-frs">
+  <div class="modal-card">
+    <h3>Switch de fournisseur en masse</h3>
+    <p class="muted">Réattribuer en un clic tous les articles d'un fournisseur à un autre.</p>
+    <label>Fournisseur Actuel (Ancien)</label>
+    <select id="switch-from-frs"></select>
+    <label>Nouveau Fournisseur</label>
+    <select id="switch-to-frs"></select>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-switch-frs')">Annuler</button>
+      <button class="btn-primary" onclick="submitSwitchFournisseurEnMasse()">Appliquer le changement</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-calendrier-conso">
+  <div class="modal-card modal-card-large" style="display:flex; flex-direction:column; max-height:88vh;">
+    <h3 style="flex-shrink:0;">📅 Consommation par mois</h3>
+    <div class="calendar-legend" style="flex-shrink:0;">
+      Pour chaque produit, combien tu en as vendu chaque mois (pas de dates précises, juste le mois). Une case foncée = un mois où tu en as beaucoup vendu pour <em>ce produit-là</em>. Change l'année pour comparer.
+    </div>
+    <div class="calendar-toolbar" style="flex-shrink:0;">
+      <select id="calendrier-year" onchange="renderCalendrierConso()"></select>
+      <input type="text" id="calendrier-search" placeholder="Filtrer un article..." oninput="renderCalendrierConso()">
+    </div>
+    <div class="calendar-total-global" id="calendrier-total-global" style="flex-shrink:0;"></div>
+    <div class="calendar-scroll">
+      <table class="calendar-table">
+        <thead>
+          <tr>
+            <th>Article</th><th>Tot.</th>
+            <th>J</th><th>F</th><th>M</th><th>A</th><th>M</th><th>J</th><th>J</th><th>A</th><th>S</th><th>O</th><th>N</th><th>D</th>
+          </tr>
+        </thead>
+        <tbody id="calendrier-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="flex-shrink:0;">
+      <button class="btn-secondary" onclick="closeModal('modal-calendrier-conso')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-info-analyse">
+  <div class="modal-card modal-card-large">
+    <h3>🧠 À quoi sert le mode Analyse ?</h3>
+    <p>Ce mode t'aide à savoir <strong>quand recommander un produit</strong>, sans avoir à réfléchir. Il fait les calculs tout seul à partir de tes ventes passées.</p>
+
+    <p><strong>Le graphique en haut :</strong><br>
+    Il montre les 10 produits qui partent le plus vite. Plus la barre est haute, plus tu en vends.</p>
+
+    <p><strong>Les 2 menus déroulants :</strong></p>
+    <p>👉 <strong>"Stock sécurité"</strong> : une marge de sécurité en plus, en semaines. Si tu choisis "2 sem extra", l'appli va te conseiller d'avoir 2 semaines de stock en plus que le strict minimum, au cas où un client achète plus que prévu.</p>
+    <p>👉 <strong>"Marge"</strong> : encore une sécurité, mais en pourcentage. Si tu choisis "20%", l'appli ajoute 20% de stock en plus par rapport à ce qu'elle a calculé. Plus tu montes ces 2 réglages, moins tu risques la rupture de stock, mais plus tu stockes de produits (donc plus d'argent immobilisé).</p>
+    <p class="muted">Astuce : si tu n'es jamais en rupture, tu peux baisser ces réglages. Si tu es souvent en rupture, monte-les.</p>
+
+    <p><strong>Le tableau en dessous, pour chaque produit :</strong></p>
+    <p>• <strong>Le badge de couleur</strong> te dit s'il faut agir :<br>
+    🚨 <strong>Rouge "Urgent"</strong> = commande-le tout de suite, tu vas être en rupture avant même que ton fournisseur ait le temps de te livrer.<br>
+    ⚠️ <strong>Orange "Réappro"</strong> = il est temps de le mettre dans une commande bientôt.<br>
+    ✅ <strong>Vert "OK"</strong> = rien à faire, tu as assez de stock pour l'instant.</p>
+    <p>• <strong>"X / sem"</strong> = combien tu en vends en moyenne chaque semaine. La flèche 📈 veut dire que ça se vend de plus en plus, 📉 que ça ralentit.</p>
+    <p>• <strong>"Seuil"</strong> = le niveau de stock en dessous duquel il faut recommander. "Actuel" = ton réglage d'aujourd'hui. "Sugg" = ce que l'appli te conseille à la place, calculé automatiquement.</p>
+
+    <p><strong>Comment bien s'en servir :</strong></p>
+    <p>1. Regarde en premier les produits avec un badge 🚨 ou ⚠️ (le tableau est déjà trié, les plus urgents sont en haut).<br>
+    2. Si le "Sugg" est différent de l'"Actuel", clique sur le bouton <strong>"Appliquer"</strong> : ça met à jour ton seuil automatiquement, tu n'as rien à calculer.<br>
+    3. Va ensuite dans le mode "Commande" pour commander les produits qui en ont besoin.</p>
+
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="closeModal('modal-info-analyse')">J'ai compris</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-reception-scan">
+  <div class="modal-card modal-card-large">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0;">Réception : <span id="rec-modal-id"></span></h3>
+      <button class="btn-small btn-ghost" onclick="closeReceptionModal()">✕ Fermer</button>
+    </div>
+    <p class="muted" style="margin:4px 0 8px 0;">Fournisseur : <span id="rec-modal-frs"></span></p>
+
+    <div id="reception-scanner-mount"></div>
+
+    <div id="reception-active-item-bar" style="background: #f3e8ff; border: 1px solid #af52de; border-radius: 8px; padding: 8px; margin: 8px 0; display: none;">
+      <div style="font-size: 12px; font-weight: 700; color: #af52de; margin-bottom: 4px;" id="rec-active-name">Aucun article sélectionné</div>
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <label style="margin:0; font-size:11px;">Qté à réceptionner :</label>
+        <input type="number" id="rec-manual-qty" min="1" value="1" style="width: 80px;">
+        <button class="btn-small" style="background:#af52de; color:#fff;" onclick="validerQuantiteReception()">Valider la quantité</button>
+      </div>
+    </div>
+
+    <div class="table-scroll" style="max-height: 28vh;">
+      <table>
+        <thead><tr><th>Article</th><th>Attendu</th><th>Reçu</th><th>Statut</th></tr></thead>
+        <tbody id="reception-items-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ================== CONFIG ==================
+const API_URL = 'https://script.google.com/macros/s/AKfycbyrH8_Qyma2r25rnMlgavbr6EVASPhgdgQkqGYQedUH0taFFvklPp41g8QRajropCd4/exec';
+
+let state = { produits: [], historique: [], config: {}, brouillons: [], commandesEnCours: [] };
+let panier = [];
+let currentMode = 'entree';
+let dataLoaded = false;
+let consoChartInstance = null;
+let commandeEnCoursSelectionnee = null;
+let refreshInterval = null;
+
+// ================== SCANNER & CAMERAS ==================
+let codeReader, scannerRunning = false, candidateCode = null, candidateCount = 0;
+let lastValidatedCode = null, lastValidatedTime = 0;
+let selectedDeviceId = localStorage.getItem('savedCameraId') || null; 
+let camerasPopulated = false;
+
+function setupReader() {
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.UPC_A]);
+  codeReader = new ZXing.BrowserMultiFormatReader(hints);
+}
+
+async function populateCameras() {
+  if (camerasPopulated) return;
+  try {
+    const devices = await codeReader.listVideoInputDevices();
+    const select = document.getElementById('camera-select');
+    if (devices.length > 1) {
+      select.innerHTML = '<option value="">-- Objectif par défaut --</option>';
+      devices.forEach((device, index) => {
+        const option = document.createElement('option');
+        option.value = device.deviceId;
+        option.text = device.label || `Caméra ${index + 1}`;
+        if (device.deviceId === selectedDeviceId) option.selected = true;
+        select.appendChild(option);
+      });
+      select.style.display = 'block';
+      camerasPopulated = true;
+    }
+  } catch (e) { console.warn("Caméras indisponibles:", e); }
+}
+
+function changeCamera() {
+  const select = document.getElementById('camera-select');
+  selectedDeviceId = select.value || null;
+  if (selectedDeviceId) localStorage.setItem('savedCameraId', selectedDeviceId);
+  else localStorage.removeItem('savedCameraId');
+  stopScanner();
+  setTimeout(() => { startScanner(); }, 300);
+}
+
+function chargerPreferencesAnalyse() {
+  const savedCouverture = localStorage.getItem('analyse_couverture');
+  const savedMarge = localStorage.getItem('analyse_marge');
+  if (savedCouverture) document.getElementById('analyse-couverture').value = savedCouverture;
+  if (savedMarge) document.getElementById('analyse-marge').value = savedMarge;
+}
+
+function sauvegarderEtRendreAnalyse() {
+  localStorage.setItem('analyse_couverture', document.getElementById('analyse-couverture').value);
+  localStorage.setItem('analyse_marge', document.getElementById('analyse-marge').value);
+  renderAnalyse();
+}
+
+function startScanner() {
+  if (scannerRunning) return;
+  scannerRunning = true;
+  let constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 }, advanced: [{ focusMode: "continuous" }] } };
+  if (selectedDeviceId) constraints.video.deviceId = { exact: selectedDeviceId };
+  else constraints.video.facingMode = "environment";
+
+  setTimeout(populateCameras, 1500);
+
+  codeReader.decodeFromConstraints(constraints, 'video', (result, err) => {
+    if (result) {
+      const rawCode = result.getText().trim();
+      const currentTime = new Date().getTime();
+      if (rawCode === lastValidatedCode && (currentTime - lastValidatedTime) < 1500) return;
+      if (rawCode === candidateCode) candidateCount++; else { candidateCode = rawCode; candidateCount = 1; }
+
+      if (candidateCount >= 3) {
+        lastValidatedCode = rawCode; lastValidatedTime = currentTime; candidateCode = null; candidateCount = 0;
+        playBeep(); triggerFlash();
+        if (navigator.vibrate) navigator.vibrate(100);
+        document.getElementById('flash-msg').textContent = "✔ " + rawCode;
+        setTimeout(() => { document.getElementById('flash-msg').textContent = ""; }, 1000);
+        handleScannedCode(rawCode);
+      }
+    }
+  }).catch(console.error);
+}
+
+function stopScanner() { if (!scannerRunning) return; scannerRunning = false; try { codeReader.reset(); } catch (e) {} }
+function manualSubmit() { const i = document.getElementById('manual-code'); const v = i.value.trim(); if (!v) return; i.value = ''; playBeep(); handleScannedCode(v); }
+function playBeep() { try { const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(); const g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(800, a.currentTime); g.gain.setValueAtTime(0.1, a.currentTime); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + 0.15); } catch(e){} }
+function triggerFlash() { const o = document.getElementById('flash-overlay'); o.classList.add('flash-active'); setTimeout(() => o.classList.remove('flash-active'), 100); }
+
+// ================== ROUTAGE & API ==================
+let dernierArticleScanneCode = null;
+
+async function handleScannedCode(code) {
+  if (!dataLoaded) { toast('Chargement en cours...'); return; }
+  
+  if (currentMode === 'reception') {
+    if (!commandeEnCoursSelectionnee) { toast("Veuillez d'abord sélectionner une commande ci-dessus !"); return; }
+    
+    const itemTrouve = commandeEnCoursSelectionnee.contenu.find(i => String(i.codeBarre) === String(code));
+    if (!itemTrouve) {
+      toast("Cet article ne fait pas partie de cette commande.");
+      return;
+    }
+
+    dernierArticleScanneCode = code;
+    document.getElementById('reception-active-item-bar').style.display = 'block';
+    document.getElementById('rec-active-name').textContent = itemTrouve.designation + ' (Code: ' + code + ')';
+    document.getElementById('rec-manual-qty').value = 1;
+    toast('Article reconnu, saisissez la quantité reçue');
+    return;
+  }
+
+  const p = state.produits.find(x => x.codeBarre === String(code));
+  if (currentMode === 'sortie' && !p) { toast("Article inconnu. Créez-le en mode Entrée."); return; }
+  if (!p) { openModalNouveau(code); return; }
+
+  const type = currentMode === 'entree' ? 'Entrée' : 'Sortie';
+  if (type === 'Sortie' && p.qte <= 0) if (!confirm('Stock à 0. Continuer ?')) return;
+
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('movement', { codeBarre: code, type, quantite: 1, commentaire: '' });
+    if (res.error) { toast('Erreur : ' + res.error); return; }
+    
+    p.qte = res.newQte;
+    toast((type === 'Entrée' ? '+1 ' : '-1 ') + (p.designation || code) + ' → ' + res.newQte);
+    
+    state.historique.unshift({
+      date: res.date, type, codeBarre: code, designation: p.designation,
+      quantite: 1, qteApres: res.newQte, commentaire: '', id: res.id
+    });
+    renderStock();
+    renderHistorique(type === 'Entrée' ? 'entree' : 'sortie');
+    renderSuggestions();
+  } catch (err) { 
+    toast('Erreur : ' + err.message); 
+  } finally { 
+    setGlobalLoading(false); 
+  }
+}
+
+async function validerQuantiteReception() {
+  if (!commandeEnCoursSelectionnee || !dernierArticleScanneCode) return;
+  const qteSaisie = Number(document.getElementById('rec-manual-qty').value) || 1;
+
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('receptionnerArticleCmd', { 
+      idCommande: commandeEnCoursSelectionnee.id, 
+      codeBarre: dernierArticleScanneCode,
+      quantite: qteSaisie 
+    });
+    if (res.error) { toast('Erreur : ' + res.error); return; }
+    
+    toast('Réception enregistrée ✔');
+    commandeEnCoursSelectionnee.contenu = res.contenu;
+    renderReceptionTable();
+    
+    document.getElementById('reception-active-item-bar').style.display = 'none';
+    dernierArticleScanneCode = null;
+
+    if (res.toutRecu) {
+      toast('🎉 Commande entièrement réceptionnée !');
+      setTimeout(() => {
+        closeReceptionModal();
+        loadData();
+        commandeEnCoursSelectionnee = null;
+        renderCommandesReceptionList();
+      }, 1500);
+    } else if (res.newQte !== undefined) {
+      const p = state.produits.find(x => x.codeBarre === String(dernierArticleScanneCode));
+      if (p) p.qte = res.newQte;
+      renderStock();
+      renderSuggestions();
+    }
+  } catch (err) { toast('Erreur : ' + err.message); } finally { setGlobalLoading(false); }
+}
+
+async function fetchWithTimeout(url, options = {}, ms = 15000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try { return await fetch(url, { ...options, signal: ctrl.signal }); }
+  catch (e) { throw new Error(e.name === 'AbortError' ? 'Le serveur ne répond pas (timeout)' : e.message); }
+  finally { clearTimeout(t); }
+}
+async function apiGet(action) { const res = await fetchWithTimeout(API_URL + '?action=' + encodeURIComponent(action)); return await res.json(); }
+async function apiPost(action, data) {
+  const res = await fetchWithTimeout(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, data }) });
+  return await res.json();
+}
+
+async function loadData(silent = false) {
+  if (!silent) setGlobalLoading(true);
+  try {
+    const data = await apiGet('getData');
+    if (data.error) throw new Error(data.error);
+    state = { 
+      produits: data.produits || [], 
+      historique: data.historique || [], 
+      config: data.config || {}, 
+      brouillons: data.brouillons || [],
+      commandesEnCours: data.commandesEnCours || []
+    };
+    dataLoaded = true;
+    
+    if (commandeEnCoursSelectionnee) {
+      const updatedCmd = state.commandesEnCours.find(c => c.id === commandeEnCoursSelectionnee.id);
+      if (updatedCmd) {
+        commandeEnCoursSelectionnee = updatedCmd;
+      } else {
+        commandeEnCoursSelectionnee = null;
+      }
+    }
+
+    renderAll();
+    refreshCalendrierSiOuvert();
+  } catch (err) { 
+    if (!silent) toast('Erreur: ' + err.message); 
+  } finally { 
+    if (!silent) setGlobalLoading(false); 
+  }
+}
+
+function startAutoRefresh() {
+  if (refreshInterval) clearInterval(refreshInterval);
+  refreshInterval = setInterval(() => {
+    if (document.hidden) return;
+    loadData(true);
+  }, 20000);
+}
+
+// ================== NAVIGATION & MODES ==================
+function switchMode(mode) {
+  if (document.getElementById('modal-reception-scan').classList.contains('show')) closeReceptionModal();
+
+  currentMode = mode;
+  document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+  document.getElementById('view-' + mode).style.display = 'flex';
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  
+  const sc = document.getElementById('scanner-section');
+  if (mode === 'entree' || mode === 'sortie') {
+    sc.style.display = 'flex';
+    sc.classList.toggle('mode-sortie', mode === 'sortie');
+    sc.classList.remove('mode-reception');
+    document.getElementById('scanner-mode-label').textContent = mode === 'entree' ? 'Mode Entrée' : 'Mode Sortie';
+    startScanner();
+  } else { sc.style.display = 'none'; stopScanner(); }
+
+  if (mode === 'stock') renderStock();
+  if (mode === 'commande') { renderSuggestions(); renderManualSelect(); renderBrouillons(); }
+  if (mode === 'reception') { renderCommandesReceptionList(); }
+  if (mode === 'analyse') loadAnalyseData();
+}
+
+function renderAll() {
+  renderStock(); renderHistorique('entree'); renderHistorique('sortie');
+  renderSuggestions(); renderManualSelect(); renderConfigForm(); renderPanier(); renderBrouillons();
+  if (currentMode === 'reception') renderCommandesReceptionList();
+  if (currentMode === 'analyse') renderAnalyse();
+}
+
+// ================== HISTORIQUE EDIT & DELETE ==================
+function openModalEditHisto(id) {
+  const item = state.historique.find(h => String(h.id) === String(id));
+  if (!item) return;
+
+  document.getElementById('edit-histo-id').value = item.id;
+  document.getElementById('edit-histo-designation').textContent = item.designation || item.codeBarre;
+  document.getElementById('edit-histo-info').textContent = `Mouvement d'${item.type} du ${formatDate(item.date)}`;
+  document.getElementById('edit-histo-qte').value = item.quantite;
+
+  showModal('modal-edit-histo');
+}
+
+async function submitEditHisto() {
+  const id = document.getElementById('edit-histo-id').value;
+  const newQty = Number(document.getElementById('edit-histo-qte').value);
+
+  if (isNaN(newQty) || newQty <= 0) {
+    toast("Saisissez une quantité valide supérieure à 0");
+    return;
+  }
+
+  closeModal('modal-edit-histo');
+  setGlobalLoading(true);
+
+  try {
+    const res = await apiPost('updateHistoriqueQty', { id, quantite: newQty });
+    if (res.error) throw new Error(res.error);
+    toast('Quantité mise à jour ✔');
+    await loadData();
+  } catch (err) {
+    toast('Erreur: ' + err.message);
+  } finally {
+    setGlobalLoading(false);
+  }
+}
+
+function renderHistorique(mode) {
+  const type = mode === 'entree' ? 'Entrée' : 'Sortie';
+  const list = state.historique.filter(h => h.type === type).slice(0, 50);
+  document.getElementById(mode + '-histo-body').innerHTML = list.map(h => `<tr>
+      <td>${formatDate(h.date)}</td>
+      <td>${escapeHtml(h.designation)}</td>
+      <td><strong>${h.quantite}</strong></td>
+      <td>${h.qteApres}</td>
+      <td style="white-space: nowrap;">
+        <button class="btn-small btn-ghost" onclick="openModalEditHisto('${h.id}')" title="Modifier la quantité">✏️</button>
+        <button class="btn-small btn-red" onclick="deleteHistoriqueRow('${h.id}')" title="Supprimer">✕</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="5" class="muted">Aucun mouvement</td></tr>';
+}
+
+async function deleteHistoriqueRow(id) {
+  if (!confirm('Supprimer cette ligne et ajuster le stock ?')) return;
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('deleteHistorique', { id });
+    if (res.error) throw new Error(res.error);
+    toast('Ligne supprimée ✔'); await loadData();
+  } catch (err) { toast('Erreur: ' + err.message); } finally { setGlobalLoading(false); }
+}
+
+// ================== VUE RECEPTION ==================
+function renderCommandesReceptionList() {
+  const container = document.getElementById('commandes-cards-container');
+  const cmds = state.commandesEnCours || [];
+
+  if (cmds.length === 0) {
+    container.innerHTML = '<p class="muted" style="text-align:center; margin:10px 0;">Aucune commande en attente de réception.</p>';
+    commandeEnCoursSelectionnee = null;
+    return;
+  }
+
+  container.innerHTML = cmds.map(c => {
+    const isSelected = commandeEnCoursSelectionnee && commandeEnCoursSelectionnee.id === c.id;
+    return `<div class="cmd-card-item ${isSelected ? 'selected' : ''}" onclick="selectionnerCommandeReception('${c.id}')">
+      <div style="display:flex; justify-content:space-between; font-weight:700; font-size:13px;">
+        <span>${c.id}</span>
+        <span style="color:#af52de;">${c.fournisseur}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:#8e8e93; margin-top:2px;">
+        <span>Date : ${formatDate(c.date)}</span>
+        <span>${c.contenu.length} articles</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  if (commandeEnCoursSelectionnee && document.getElementById('modal-reception-scan').classList.contains('show')) {
+    renderReceptionTable();
+  }
+}
+
+function selectionnerCommandeReception(id) {
+  commandeEnCoursSelectionnee = state.commandesEnCours.find(c => c.id === id);
+  if (!commandeEnCoursSelectionnee) return;
+  renderCommandesReceptionList();
+  openReceptionModal();
+}
+
+function openReceptionModal() {
+  if (!commandeEnCoursSelectionnee) return;
+  document.getElementById('rec-modal-id').textContent = commandeEnCoursSelectionnee.id;
+  document.getElementById('rec-modal-frs').textContent = commandeEnCoursSelectionnee.fournisseur;
+  renderReceptionTable();
+
+  const sc = document.getElementById('scanner-section');
+  document.getElementById('reception-scanner-mount').appendChild(sc);
+  sc.style.display = 'flex';
+  sc.classList.add('mode-reception');
+  document.getElementById('scanner-mode-label').textContent = 'Mode Réception Commande';
+  startScanner();
+
+  showModal('modal-reception-scan');
+}
+
+function closeReceptionModal() {
+  stopScanner();
+  const sc = document.getElementById('scanner-section');
+  const anchor = document.getElementById('scanner-anchor');
+  anchor.parentNode.insertBefore(sc, anchor);
+  sc.style.display = 'none';
+  document.getElementById('reception-active-item-bar').style.display = 'none';
+  dernierArticleScanneCode = null;
+  closeModal('modal-reception-scan');
+}
+
+function renderReceptionTable() {
+  if (!commandeEnCoursSelectionnee) return;
+  const tbody = document.getElementById('reception-items-body');
+  tbody.innerHTML = commandeEnCoursSelectionnee.contenu.map(item => {
+    const complet = item.qteRecue >= item.qte;
+    return `<tr style="${complet ? 'background: #e8f5e9;' : ''}">
+      <td>${escapeHtml(item.designation)}<br><span class="muted">${item.codeBarre}</span></td>
+      <td>${item.qte}</td>
+      <td><strong>${item.qteRecue}</strong></td>
+      <td>${complet ? '✅ Reçu' : '⏳ En attente'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ================== RENDUS STOCK, ANALYSE & COMMANDES ==================
+function renderStock() {
+  const tbody = document.getElementById('stock-body');
+  const filter = document.getElementById('stock-search').value.trim().toLowerCase();
+  
+  let totalItems = 0, totalValue = 0;
+
+  const codesCommandes = new Set();
+  (state.commandesEnCours || []).forEach(cmd => {
+    (cmd.contenu || []).forEach(item => {
+      if (item.qteRecue < item.qte) {
+        codesCommandes.add(String(item.codeBarre));
+      }
+    });
+  });
+
+  const fullList = state.produits.filter(p => !filter || p.codeBarre.toLowerCase().includes(filter) || (p.designation || '').toLowerCase().includes(filter) || (p.fournisseur || '').toLowerCase().includes(filter)).sort((a,b) => (a.designation||'').localeCompare(b.designation||''));
+
+  fullList.forEach(p => {
+    totalItems += p.qte;
+    totalValue += (p.qte * p.prixAchat);
+  });
+
+  tbody.innerHTML = fullList.map(p => {
+    const v = p.qte * p.prixAchat;
+    const estcommande = codesCommandes.has(String(p.codeBarre));
+    
+    return `<tr class="${p.qte <= p.seuil ? 'row-alert' : ''}">
+      <td>
+        ${escapeHtml(p.designation)}<br><span class="muted">${escapeHtml(p.codeBarre)}</span>
+        ${estcommande ? '<br><span class="badge-commande">📦 Commandé</span>' : ''}
+      </td>
+      <td>${p.qte}<br><span class="muted">${v.toFixed(2)}€ TTC</span></td>
+      <td><span class="muted">${escapeHtml(p.fournisseur || 'Non défini')}</span></td>
+      <td>${p.seuil}</td><td>${p.prixAchat.toFixed(2)}€</td>
+      <td style="text-align:center;"><button class="btn-small btn-ghost" onclick="openModalAjust('${p.codeBarre}')">✏️</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" class="muted">Aucun article</td></tr>';
+
+  document.getElementById('tot-qty').textContent = `${totalItems} (${fullList.length} fiches)`;
+  document.getElementById('tot-val').textContent = totalValue.toFixed(2) + ' € TTC';
+}
+
+// ================== CALENDRIER DE CONSOMMATION ==================
+let calendrierConso = null; // { codeBarre: { annee: [12 valeurs] } }
+let calendrierYears = [];
+
+async function refreshCalendrierSiOuvert() {
+  calendrierConso = null; // invalide le cache : prochaine ouverture = données fraîches
+  const modal = document.getElementById('modal-calendrier-conso');
+  if (!modal.classList.contains('show')) return; // pas ouvert -> pas la peine de recharger maintenant
+
+  const sel = document.getElementById('calendrier-year');
+  const anneeChoisie = sel.value;
+  try {
+    const res = await apiGet('getConsoCalendrier');
+    if (res.error) throw new Error(res.error);
+    calendrierConso = res.conso || {};
+    calendrierYears = res.years || [];
+    sel.innerHTML = calendrierYears.map(y => `<option value="${y}">${y}</option>`).join('') || '<option>-</option>';
+    if (calendrierYears.includes(Number(anneeChoisie))) sel.value = anneeChoisie;
+    renderCalendrierConso();
+  } catch (e) { /* silencieux : le calendrier se rafraîchira au prochain chargement */ }
+}
+
+async function openCalendrierConso() {
+  showModal('modal-calendrier-conso');
+  if (calendrierConso) { renderCalendrierConso(); return; }
+  setGlobalLoading(true);
+  try {
+    const res = await apiGet('getConsoCalendrier');
+    if (res.error) throw new Error(res.error);
+    calendrierConso = res.conso || {};
+    calendrierYears = res.years || [];
+    const sel = document.getElementById('calendrier-year');
+    sel.innerHTML = calendrierYears.map(y => `<option value="${y}">${y}</option>`).join('') || '<option>-</option>';
+  } catch (e) {
+    toast('Erreur calendrier : ' + e.message);
+    closeModal('modal-calendrier-conso');
+    return;
+  } finally {
+    setGlobalLoading(false);
+  }
+  renderCalendrierConso();
+}
+
+function heatStyle(val, max) {
+  if (!val) return '';
+  const ratio = max > 0 ? val / max : 0;
+  const alpha = (0.15 + 0.65 * ratio).toFixed(2);
+  return `background: rgba(0,122,255,${alpha}); ${ratio > 0.55 ? 'color:#fff;' : ''}`;
+}
+
+function renderCalendrierConso() {
+  if (!calendrierConso) return;
+  const year = Number(document.getElementById('calendrier-year').value);
+  const filtre = (document.getElementById('calendrier-search').value || '').toLowerCase().trim();
+
+  let totalAnnee = 0, totalAnneePrec = 0;
+
+  const rows = (state.produits || []).map(p => {
+    const parAnnee = calendrierConso[p.codeBarre] || {};
+    const moisArr = parAnnee[year] || new Array(12).fill(0);
+    const total = moisArr.reduce((a, b) => a + b, 0);
+    const moisArrPrec = parAnnee[year - 1] || null;
+    const totalPrec = moisArrPrec ? moisArrPrec.reduce((a, b) => a + b, 0) : null;
+    return { p, moisArr, total, totalPrec };
+  }).filter(r => r.total > 0 && (!filtre || String(r.p.designation || '').toLowerCase().includes(filtre) || r.p.codeBarre.includes(filtre)))
+    .sort((a, b) => b.total - a.total);
+
+  rows.forEach(r => { totalAnnee += r.total; if (r.totalPrec !== null) totalAnneePrec += r.totalPrec; });
+
+  const globalDiv = document.getElementById('calendrier-total-global');
+  if (totalAnneePrec > 0) {
+    const pct = Math.round(((totalAnnee - totalAnneePrec) / totalAnneePrec) * 100);
+    const fleche = pct >= 0 ? `📈 +${pct}%` : `📉 ${pct}%`;
+    globalDiv.textContent = `Total ${year} : ${totalAnnee} vendus (${fleche} vs ${year - 1})`;
+  } else {
+    globalDiv.textContent = `Total ${year} : ${totalAnnee} vendus`;
+  }
+
+  const tbody = document.getElementById('calendrier-body');
+  tbody.innerHTML = rows.map(r => {
+    const max = Math.max(...r.moisArr, 1);
+    const cells = r.moisArr.map(v => `<td style="${heatStyle(v, max)}">${v || ''}</td>`).join('');
+    let delta = '';
+    if (r.totalPrec !== null && r.totalPrec > 0) {
+      const pct = Math.round(((r.total - r.totalPrec) / r.totalPrec) * 100);
+      delta = pct >= 0 ? `<span class="calendar-delta-up">▲${pct}%</span>` : `<span class="calendar-delta-down">▼${Math.abs(pct)}%</span>`;
+    }
+    return `<tr><td title="${escapeHtml(r.p.designation)}">${escapeHtml(r.p.designation)}${delta}</td><td>${r.total}</td>${cells}</tr>`;
+  }).join('') || '<tr><td colspan="14" class="muted" style="text-align:left;">Aucune consommation cette année-là</td></tr>';
+}
+
+let analyseConso = null;
+
+async function loadAnalyseData() {
+  setGlobalLoading(true);
+  try {
+    const res = await apiGet('getAnalyse');
+    if (res.error) throw new Error(res.error);
+    analyseConso = res.conso || {};
+  } catch (e) {
+    analyseConso = {};
+    toast('Erreur analyse : ' + e.message);
+  } finally {
+    setGlobalLoading(false);
+  }
+  renderAnalyse();
+}
+
+function renderAnalyse() {
+  const tbody = document.getElementById('analyse-body');
+  const extraWeeksCoverage = Number(document.getElementById('analyse-couverture').value) || 2;
+  const coeffSecurite = Number(document.getElementById('analyse-marge').value) || 1.2;
+  
+  if (!analyseConso) { loadAnalyseData(); return; }
+
+  const conso12m = analyseConso || {};
+  const history = state.historique || [];
+  
+  let fournisseursList = [];
+  try { fournisseursList = JSON.parse(state.config.fournisseurs || '[]'); } catch(e){}
+
+  const limit30d = new Date();
+  limit30d.setDate(limit30d.getDate() - 30);
+  
+  const conso30d = {};
+  history.forEach(h => {
+    if (h.type === 'Sortie' && new Date(h.date) >= limit30d) {
+      conso30d[h.codeBarre] = (conso30d[h.codeBarre] || 0) + Number(h.quantite);
+    }
+  });
+
+  const list = state.produits.map(p => {
+    const tot12m = conso12m[p.codeBarre] || 0;
+    const tot30d = conso30d[p.codeBarre] || 0;
+    
+    const avgWeek12m = tot12m / 52;
+    const avgWeek30d = tot30d / 4.28;
+    
+    const vitesseRetention = Math.max(avgWeek12m, avgWeek30d);
+    
+    let tendance = 'stable';
+    if (avgWeek30d > avgWeek12m * 1.25 && tot30d > 2) tendance = 'hausse';
+    else if (avgWeek30d < avgWeek12m * 0.75 && tot12m > 5) tendance = 'baisse';
+
+    const frsInfo = fournisseursList.find(f => f.nom && f.nom.toLowerCase() === (p.fournisseur || '').toLowerCase());
+    const delaiJours = frsInfo ? Number(frsInfo.delai) || 7 : 7;
+    const delaiSemaines = delaiJours / 7;
+
+    const totalWeeksNeeded = delaiSemaines + extraWeeksCoverage;
+    const suggSeuil = Math.ceil((vitesseRetention * totalWeeksNeeded) * coeffSecurite);
+    
+    const consoJeu = vitesseRetention / 7;
+    const joursRestants = consoJeu > 0 ? Math.floor(p.qte / consoJeu) : 999;
+
+    return { 
+      ...p, 
+      tot12m, 
+      avgWeek: vitesseRetention, 
+      suggSeuil, 
+      joursRestants, 
+      tendance,
+      delaiJours
+    };
+  }).filter(p => p.tot12m > 0 || p.qte > 0).sort((a, b) => a.joursRestants - b.joursRestants);
+
+  tbody.innerHTML = list.map(p => {
+    let badgeAlert = '';
+    if (p.joursRestants <= (p.delaiJours)) {
+      badgeAlert = `<span style="background:#ff3b30; color:#fff; padding:1px 4px; border-radius:4px; font-size:9px; font-weight:bold;">🚨 Urgent (${p.delaiJours}j)</span>`;
+    } else if (p.qte <= p.suggSeuil) {
+      badgeAlert = `<span style="background:#ff9500; color:#fff; padding:1px 4px; border-radius:4px; font-size:9px; font-weight:bold;">⚠️ Réappro (~${p.joursRestants}j)</span>`;
+    } else {
+      badgeAlert = `<span style="color:#34c759; font-size:10px;">✅ OK (~${p.joursRestants}j)</span>`;
+    }
+
+    let iconeTendance = '➡️';
+    if (p.tendance === 'hausse') iconeTendance = '📈 <span style="color:#ff3b30; font-size:9px;">(+Fort)</span>';
+    if (p.tendance === 'baisse') iconeTendance = '📉';
+
+    return `<tr>
+      <td>
+        <strong>${escapeHtml(p.designation)}</strong><br>
+        <span class="muted">${p.codeBarre} | ${escapeHtml(p.fournisseur || 'Frs Non Défini')}</span><br>
+        ${badgeAlert}
+      </td>
+      <td>
+        <strong>${p.qte}</strong> en stock<br>
+        <span class="muted">${p.avgWeek.toFixed(1)} / sem ${iconeTendance}</span>
+      </td>
+      <td>
+        <span class="muted">Actuel: ${p.seuil}</span><br>
+        <strong>Sugg: ${p.suggSeuil}</strong>
+      </td>
+      <td>
+        <button class="btn-small ${p.seuil < p.suggSeuil ? 'btn-green' : 'btn-ghost'}" 
+                onclick="applySeuil('${p.codeBarre}', ${p.suggSeuil})">
+          Appliquer
+        </button>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" class="muted">Aucune donnée d\'analyse disponible</td></tr>';
+
+  const chartSorted = list.filter(p => p.tot12m > 0).sort((a,b) => b.tot12m - a.tot12m);
+  renderChart(chartSorted.slice(0, 10));
+}
+
+function renderChart(topList) {
+  const wrap = document.getElementById('conso-chart-wrap');
+  if (topList.length === 0) { 
+    wrap.style.display = 'none'; 
+    return; 
+  }
+  wrap.style.display = 'block';
+  document.getElementById('conso-chart-title').textContent = `Top ${topList.length} Consommation (12 derniers mois)`;
+  
+  if (consoChartInstance) {
+    consoChartInstance.destroy();
+  }
+  
+  const ctx = document.getElementById('conso-chart').getContext('2d');
+  consoChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: topList.map(p => (p.designation || p.codeBarre).substring(0,10)),
+      datasets: [{ label: 'Unités sorties', data: topList.map(p => p.tot12m), backgroundColor: '#5856d6', borderRadius: 4 }]
+    },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: false, 
+      plugins: { legend: { display: false } }, 
+      scales: { 
+        y: { beginAtZero: true, ticks: { font: { size: 9 } } },
+        x: { ticks: { font: { size: 9 } } }
+      } 
+    }
+  });
+}
+
+function renderBrouillons() {
+  const sec = document.getElementById('brouillons-section');
+  const tbody = document.getElementById('brouillons-body');
+  if (!state.brouillons || state.brouillons.length === 0) {
+    sec.style.display = 'none'; return;
+  }
+  sec.style.display = 'block';
+  tbody.innerHTML = state.brouillons.map(b => `<tr>
+    <td>Brouillon du ${formatDate(b.date)}<br><span class="muted">${b.contenu.length} articles</span></td>
+    <td style="text-align:right;">
+      <button class="btn-small btn-green" onclick="chargerBrouillon('${b.id}')">Ouvrir</button>
+      <button class="btn-small btn-red" onclick="supprimerBrouillon('${b.id}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function sauvegarderBrouillon() {
+  if (panier.length === 0) { toast("Le panier est vide"); return; }
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('savePanier', { panier });
+    if (res.error) throw new Error(res.error);
+    toast('Brouillon sauvegardé ✔');
+    panier = []; 
+    await loadData();
+  } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
+}
+
+function chargerBrouillon(id) {
+  const b = state.brouillons.find(x => x.id === id);
+  if (!b) return;
+  if (panier.length > 0 && !confirm("Écraser le panier en cours ?")) return;
+  panier = b.contenu;
+  renderPanier();
+  supprimerBrouillon(id);
+}
+
+async function supprimerBrouillon(id) {
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('deletePanier', { id });
+    if (res.error) throw new Error(res.error);
+    await loadData();
+  } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
+}
+
+async function envoyerCommande() {
+  if (panier.length === 0) { toast("Le panier est vide"); return; }
+  const c = state.config || {};
+  if (!c.fournisseurEmail) { toast("Email du fournisseur non configuré !"); return; }
+  
+  let total = 0;
+  panier.forEach(a => { total += (a.qte * (a.prixAchat || 0)); });
+  const franco = Number(c.fournisseurFranco) || 0;
+  
+  if (franco > 0 && total < franco) {
+    if (!confirm(`Attention, le Franco de port (${franco}€ TTC) n'est pas atteint (Actuel: ${total.toFixed(2)}€ TTC).\n\nVoulez-vous quand même envoyer la commande ?`)) {
+      return;
+    }
+  }
+
+  setGlobalLoading(true);
+  document.getElementById('send-btn').disabled = true;
+  try {
+    const res = await apiPost('sendOrder', { panier, config: c });
+    if (res.error) throw new Error(res.error);
+    toast('Commande envoyée ✔');
+    panier = []; renderPanier();
+    await loadData();
+  } catch (e) { toast('Erreur : ' + e.message); } 
+  finally { setGlobalLoading(false); document.getElementById('send-btn').disabled = false; }
+}
+
+async function submitAjust() {
+  const code = document.getElementById('modal-ajust').dataset.code;
+  const qte = Number(document.getElementById('adj-qty').value);
+  const prix = Number(document.getElementById('adj-prix').value);
+  const seuil = Number(document.getElementById('adj-seuil').value);
+  const fournisseur = document.getElementById('adj-fournisseur').value;
+  const commentaire = document.getElementById('adj-comment').value.trim();
+  closeModal('modal-ajust');
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('adjustProduct', { codeBarre: code, qte, prixAchat: prix, seuil, fournisseur, commentaire });
+    if (res.error) throw new Error(res.error);
+    toast('Article ajusté ✔'); await loadData();
+  } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
+}
+
+async function submitReglages() {
+  const cfg = {
+    ...state.config,
+    nom: document.getElementById('cfg-nom').value, representant: document.getElementById('cfg-representant').value,
+    siret: document.getElementById('cfg-siret').value, adresse: document.getElementById('cfg-adresse').value,
+    mail: document.getElementById('cfg-mail').value, tel: document.getElementById('cfg-tel').value
+  };
+  closeModal('modal-reglages');
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('saveConfig', cfg);
+    if (res.error) throw new Error(res.error);
+    toast('Réglages sauvegardés ✔'); await loadData();
+  } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
+}
+
+async function applySeuil(code, seuil) {
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('updateSeuil', { codeBarre: code, seuil });
+    if (res.error) throw new Error(res.error);
+    toast('Seuil mis à jour ✔'); await loadData();
+  } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
+}
+
+function renderSuggestions() {
+  const tbody = document.getElementById('suggestions-body');
+  
+  const codesCommandes = new Set();
+  (state.commandesEnCours || []).forEach(cmd => {
+    (cmd.contenu || []).forEach(item => {
+      if (item.qteRecue < item.qte) {
+        codesCommandes.add(String(item.codeBarre));
+      }
+    });
+  });
+
+  const activeFrs = state.config.fournisseurNom || '';
+
+  const list = state.produits.filter(p => {
+    const pFrs = (p.fournisseur || '').trim().toLowerCase();
+    const actFrs = activeFrs.trim().toLowerCase();
+    const frsMatch = !activeFrs || pFrs === actFrs;
+    return p.qte <= p.seuil && !codesCommandes.has(String(p.codeBarre)) && frsMatch;
+  });
+  
+  tbody.innerHTML = list.map(p => `<tr>
+      <td>${escapeHtml(p.designation)}<br><span class="muted">${p.qte}/${p.seuil}</span></td>
+      <td><input type="number" min="1" value="${Math.max(p.seuil - p.qte, 1)}" id="sugg-qty-${p.codeBarre}" class="qty-input"></td>
+      <td><button class="btn-small btn-green" onclick="addToPanier('${p.codeBarre}')">Ajouter</button></td>
+    </tr>`).join('') || '<tr><td colspan="3" class="muted">Aucune suggestion disponible 🎉</td></tr>';
+}
+
+function renderManualSelect() {
+  document.getElementById('manual-select').innerHTML = '<option value="">-- choisir un article --</option>' + state.produits.sort((a,b) => (a.designation||'').localeCompare(b.designation||'')).map(p => `<option value="${p.codeBarre}">${escapeHtml(p.designation)} (${p.codeBarre})</option>`).join('');
+}
+
+function populateFournisseursSelects() {
+  let list = [];
+  try { list = JSON.parse(state.config.fournisseurs || '[]'); } catch(e){}
+  const options = '<option value="">-- Aucun / Non défini --</option>' + list.map(f => `<option value="${escapeHtml(f.nom)}">${escapeHtml(f.nom)}</option>`).join('');
+  
+  const newSelect = document.getElementById('new-fournisseur');
+  const adjSelect = document.getElementById('adj-fournisseur');
+  // On garde la sélection en cours (sinon le refresh auto en fond l'efface toutes les 20s)
+  if (newSelect) { const prev = newSelect.value; newSelect.innerHTML = options; newSelect.value = prev; }
+  if (adjSelect) { const prev = adjSelect.value; adjSelect.innerHTML = options; adjSelect.value = prev; }
+}
+
+function renderConfigForm() {
+  const c = state.config || {};
+  const setVal = (id, val) => { const e = document.getElementById(id); if(e) e.value = val || ''; };
+  setVal('cfg-nom', c.nom); setVal('cfg-representant', c.representant); setVal('cfg-siret', c.siret);
+  setVal('cfg-adresse', c.adresse); setVal('cfg-mail', c.mail); setVal('cfg-tel', c.tel);
+
+  let list = [];
+  try { list = JSON.parse(c.fournisseurs || '[]'); } catch(e){}
+  
+  const selectFrs = document.getElementById('cmd-select-frs');
+  if (selectFrs) {
+    selectFrs.innerHTML = '<option value="">-- Choisir un fournisseur --</option>' + 
+      list.map((f, idx) => `<option value="${idx}" ${f.nom === c.fournisseurNom ? 'selected' : ''}>${f.nom}</option>`).join('');
+  }
+
+  populateFournisseursSelects();
+  updateFrsDetailsUI();
+}
+
+function updateFrsDetailsUI() {
+  const c = state.config || {};
+  const info = document.getElementById('frs-info-details');
+  if (info) {
+    info.textContent = c.fournisseurNom ? 
+      `Email : ${c.fournisseurEmail || 'Non renseigné'} | Franco : ${c.fournisseurFranco || 0} € TTC | Délai : ${c.fournisseurDelai || 7}j` : 
+      'Aucun fournisseur actif sélectionné.';
+  }
+}
+
+function selectionnerFournisseurCommande(idx) {
+  if (idx === "") {
+    saveConfigFields({ fournisseurNom: '', fournisseurEmail: '', fournisseurFranco: 0, fournisseurDelai: 7 });
+    return;
+  }
+  try {
+    let list = JSON.parse(state.config.fournisseurs || '[]');
+    const f = list[idx];
+    if (f) {
+      saveConfigFields({ fournisseurNom: f.nom, fournisseurEmail: f.email, fournisseurFranco: f.franco, fournisseurDelai: f.delai || 7 });
+    }
+  } catch(e){}
+}
+
+async function saveConfigFields(changes) {
+  const c = { ...(state.config || {}), ...changes };
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('saveConfig', c);
+    if (res.error) throw new Error(res.error);
+    await loadData();
+    toast('Fournisseur mis à jour ✔');
+  } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
+}
+
+function ouvrirModalNouveauFournisseur() {
+  document.getElementById('frs-modal-title').textContent = "Nouveau Fournisseur";
+  document.getElementById('edit-frs-mode').value = "create";
+  document.getElementById('new-frs-nom').value = '';
+  document.getElementById('new-frs-nom').disabled = false;
+  document.getElementById('new-frs-mail').value = '';
+  document.getElementById('new-frs-franco').value = '0';
+  document.getElementById('new-frs-delai').value = '7';
+  showModal('modal-nouveau-frs');
+}
+
+function ouvrirModalModifierFournisseur() {
+  const nomActuel = state.config.fournisseurNom;
+  if (!nomActuel) {
+    toast("Veuillez d'abord sélectionner un fournisseur à modifier.");
+    return;
+  }
+  
+  let list = [];
+  try { list = JSON.parse(state.config.fournisseurs || '[]'); } catch(e){}
+  const f = list.find(item => item.nom && item.nom.toLowerCase() === nomActuel.toLowerCase());
+
+  document.getElementById('frs-modal-title').textContent = "Modifier : " + nomActuel;
+  document.getElementById('edit-frs-mode').value = "edit";
+  document.getElementById('new-frs-nom').value = nomActuel;
+  document.getElementById('new-frs-nom').disabled = true;
+  document.getElementById('new-frs-mail').value = f ? f.email : (state.config.fournisseurEmail || '');
+  document.getElementById('new-frs-franco').value = f ? f.franco : (state.config.fournisseurFranco || 0);
+  document.getElementById('new-frs-delai').value = f ? f.delai : (state.config.fournisseurDelai || 7);
+  showModal('modal-nouveau-frs');
+}
+
+async function submitNouveauFournisseurRapide() {
+  const nom = document.getElementById('new-frs-nom').value.trim();
+  const email = document.getElementById('new-frs-mail').value.trim();
+  const franco = Number(document.getElementById('new-frs-franco').value) || 0;
+  const delai = Number(document.getElementById('new-frs-delai').value) || 7;
+
+  if (!nom) { toast('Le nom du fournisseur est requis'); return; }
+
+  closeModal('modal-nouveau-frs');
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('saveConfig', { ...state.config, fournisseurNom: nom, fournisseurEmail: email, fournisseurFranco: franco, fournisseurDelai: delai });
+    if (res.error) throw new Error(res.error);
+    toast('Fournisseur enregistré ✔');
+    await loadData();
+  } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
+}
+
+function ouvrirModalSwitchFournisseur() {
+  let list = [];
+  try { list = JSON.parse(state.config.fournisseurs || '[]'); } catch(e){}
+  if (list.length < 2) {
+    toast("Au moins 2 fournisseurs sont nécessaires pour un transfert en masse.");
+    return;
+  }
+  const opts = list.map(f => `<option value="${escapeHtml(f.nom)}">${escapeHtml(f.nom)}</option>`).join('');
+  document.getElementById('switch-from-frs').innerHTML = opts;
+  document.getElementById('switch-to-frs').innerHTML = opts;
+  showModal('modal-switch-frs');
+}
+
+async function submitSwitchFournisseurEnMasse() {
+  const ancienNom = document.getElementById('switch-from-frs').value;
+  const nouveauNom = document.getElementById('switch-to-frs').value;
+
+  if (ancienNom === nouveauNom) {
+    toast("Choisissez deux fournisseurs différents !");
+    return;
+  }
+
+  if (!confirm(`Remplacer tous les articles gérés par "${ancienNom}" vers "${nouveauNom}" ?`)) return;
+
+  closeModal('modal-switch-frs');
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('switchFournisseurEnMasse', { ancienNom, nouveauNom });
+    if (res.error) throw new Error(res.error);
+    toast(`Transfert réussi : ${res.modifiedCount} article(s) mis à jour ✔`);
+    await loadData();
+  } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
+}
+
+async function supprimerFournisseurActuelCommande() {
+  const nomActuel = state.config.fournisseurNom;
+  if (!nomActuel) {
+    toast("Aucun fournisseur actuellement sélectionné.");
+    return;
+  }
+  if (!confirm(`Voulez-vous vraiment supprimer le fournisseur "${nomActuel}" ?`)) return;
+
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('deleteFournisseur', { nom: nomActuel });
+    if (res.error) throw new Error(res.error);
+    toast('Fournisseur supprimé ✔');
+    await loadData();
+  } catch (e) {
+    toast('Erreur : ' + e.message);
+  } finally {
+    setGlobalLoading(false);
+  }
+}
+
+function renderPanier() {
+  let total = 0;
+  document.getElementById('panier-body').innerHTML = panier.map((a, i) => {
+    const t = a.qte * a.prixAchat; total += t;
+    return `<tr><td>${escapeHtml(a.designation)}</td><td><input type="number" min="1" value="${a.qte}" class="qty-input" onchange="updatePanierQty(${i}, this.value)"></td><td>${t.toFixed(2)}€ TTC</td><td><button class="btn-small btn-red" onclick="removeFromPanier(${i})">✕</button></td></tr>`;
+  }).join('') || '<tr><td colspan="4" class="muted">Panier vide</td></tr>';
+  document.getElementById('panier-total').textContent = total.toFixed(2) + ' € TTC';
+}
+
+function addToPanier(code) {
+  const p = state.produits.find(x => x.codeBarre === code); if (!p) return;
+  const qty = Number(document.getElementById('sugg-qty-' + code).value) || 1;
+  const existing = panier.find(x => x.codeBarre === code);
+  if (existing) existing.qte += qty; else panier.push({ codeBarre: p.codeBarre, designation: p.designation, qte: qty, prixAchat: p.prixAchat });
+  renderPanier(); toast('Ajouté au panier');
+}
+
+function addManualToPanier() {
+  const code = document.getElementById('manual-select').value; if (!code) { toast('Choisissez un article'); return; }
+  const qty = Number(document.getElementById('manual-qty').value) || 1;
+  const p = state.produits.find(x => x.codeBarre === code);
+  const existing = panier.find(x => x.codeBarre === code);
+  if (existing) existing.qte += qty; else panier.push({ codeBarre: p.codeBarre, designation: p.designation, qte: qty, prixAchat: p.prixAchat });
+  renderPanier(); toast('Ajouté au panier');
+}
+
+function updatePanierQty(i, val) { panier[i].qte = Math.max(Number(val) || 1, 1); renderPanier(); }
+function removeFromPanier(i) { panier.splice(i, 1); renderPanier(); }
+
+function showModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function openModalNouveau(code) {
+  document.getElementById('new-code').value = code || '';
+  ['designation','qte','prix','contenance','seuil'].forEach(id => document.getElementById('new-'+id).value = (id==='qte'||id==='prix'||id==='seuil')?0:'');
+  populateFournisseursSelects();
+  document.getElementById('new-fournisseur').value = '';
+  showModal('modal-nouveau');
+}
+
+async function submitNouveau() {
+  const codeBarre = document.getElementById('new-code').value.trim(); if (!codeBarre) { toast('Code requis'); return; }
+  if (state.produits.find(x => x.codeBarre === codeBarre)) { toast('Code déjà existant'); return; }
+  const designation = document.getElementById('new-designation').value.trim(); if (!designation) { toast('Désignation requise'); return; }
+  const data = { 
+    codeBarre, 
+    designation, 
+    qte: Number(document.getElementById('new-qte').value)||0, 
+    prixAchat: Number(document.getElementById('new-prix').value)||0, 
+    fournisseur: document.getElementById('new-fournisseur').value,
+    contenance: document.getElementById('new-contenance').value.trim(), 
+    seuil: Number(document.getElementById('new-seuil').value)||0 
+  };
+  closeModal('modal-nouveau'); setGlobalLoading(true);
+  try { const res = await apiPost('upsertProduct', data); if (res.error) throw new Error(res.error); toast('Article créé ✔'); await loadData(); }
+  catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
+}
+
+function openModalAjust(code) {
+  const p = state.produits.find(x => x.codeBarre === code); if (!p) return;
+  document.getElementById('modal-ajust').dataset.code = code;
+  document.getElementById('adj-info').textContent = (p.designation || code);
+  document.getElementById('adj-qty').value = p.qte; 
+  document.getElementById('adj-prix').value = p.prixAchat || 0;
+  document.getElementById('adj-seuil').value = p.seuil || 0; 
+  document.getElementById('adj-comment').value = '';
+  
+  populateFournisseursSelects();
+  document.getElementById('adj-fournisseur').value = p.fournisseur || '';
+
+  showModal('modal-ajust');
+}
+
+function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
+function setGlobalLoading(show) { 
+  document.getElementById('loading-bar').classList.toggle('show', show);
+  document.querySelectorAll('.view-loading-overlay').forEach(el => el.classList.toggle('show', show));
+}
+function escapeHtml(str) { return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function formatDate(dateStr) { if (!dateStr) return ''; const d = new Date(dateStr); return isNaN(d) ? dateStr : d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+
+window.addEventListener('DOMContentLoaded', () => { 
+  setupReader(); 
+  chargerPreferencesAnalyse();
+  loadData(); 
+  switchMode('sortie'); 
+  startAutoRefresh();
+});
+</script>
+</body>
+</html>
