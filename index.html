@@ -1422,14 +1422,14 @@ function renderSuggestions() {
   });
   
   tbody.innerHTML = list.map(p => `<tr>
-      <td>${escapeHtml(p.designation)}<br><span class="muted">${p.qte}/${p.seuil}</span></td>
+            <td>${escapeHtml(p.designation)}<br><span class="muted">${p.qte}/${p.seuil}${p.volume ? ' · ' + escapeHtml(p.volume) : ''}</span></td>
       <td><input type="number" min="1" value="${Math.max(p.seuil - p.qte, 1)}" id="sugg-qty-${p.codeBarre}" class="qty-input"></td>
       <td><button class="btn-small btn-green" onclick="addToPanier('${p.codeBarre}')">Ajouter</button></td>
     </tr>`).join('') || '<tr><td colspan="3" class="muted">Aucune suggestion disponible 🎉</td></tr>';
 }
 
 function renderManualSelect() {
-  document.getElementById('manual-select').innerHTML = '<option value="">-- choisir un article --</option>' + state.produits.sort((a,b) => (a.designation||'').localeCompare(b.designation||'')).map(p => `<option value="${p.codeBarre}">${escapeHtml(p.designation)} (${p.codeBarre})</option>`).join('');
+  document.getElementById('manual-select').innerHTML = '<option value="">-- choisir un article --</option>' + state.produits.sort((a,b) => (a.designation||'').localeCompare(b.designation||'')).map(p => `<option value="${p.codeBarre}">${escapeHtml(p.designation)} ${p.volume ? ' · ' + p.volume : ''} (${p.codeBarre})</option>`).join('');
 }
 
 function populateFournisseursSelects() {
@@ -1602,12 +1602,12 @@ async function supprimerFournisseurActuelCommande() {
     setGlobalLoading(false);
   }
 }
-
+function volumeDe_(code) { const p = state.produits.find(x => x.codeBarre === code); return p ? (p.volume || '') : ''; }
 function renderPanier() {
   let total = 0;
   document.getElementById('panier-body').innerHTML = panier.map((a, i) => {
     const t = a.qte * a.prixAchat; total += t;
-    return `<tr><td>${escapeHtml(a.designation)}</td><td><input type="number" min="1" value="${a.qte}" class="qty-input" onchange="updatePanierQty(${i}, this.value)"></td><td>${t.toFixed(2)}€ TTC</td><td><button class="btn-small btn-red" onclick="removeFromPanier(${i})">✕</button></td></tr>`;
+    return `<tr><td>${escapeHtml(a.designation)}${volumeDe_(a.codeBarre) ? '<br><span class="muted">' + escapeHtml(volumeDe_(a.codeBarre)) + '</span>' : ''}</td><td><input type="number" min="1" value="${a.qte}" class="qty-input" onchange="updatePanierQty(${i}, this.value)"></td><td>${t.toFixed(2)}€ TTC</td><td><button class="btn-small btn-red" onclick="removeFromPanier(${i})">✕</button></td></tr>`;
   }).join('') || '<tr><td colspan="4" class="muted">Panier vide</td></tr>';
   document.getElementById('panier-total').textContent = total.toFixed(2) + ' € TTC';
 }
