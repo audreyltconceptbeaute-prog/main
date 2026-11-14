@@ -218,6 +218,10 @@
       <div class="stock-header-row">
         <h2>Stock global</h2>
         <div style="display:flex; gap:4px;">
+                   <div class="stock-filter" id="tva-toggle" style="margin:0; width:96px;">
+            <button data-m="HT" onclick="setAffichagePrix('HT')">HT</button>
+            <button data-m="TTC" onclick="setAffichagePrix('TTC')">TTC</button>
+          </div>
           <button class="btn-small btn-ghost" onclick="openCalendrierConso()">📅</button>
           <button class="btn-small btn-green" onclick="openModalNouveau(null)">+ Nouvel article</button>
         </div>
@@ -234,7 +238,7 @@
       </div>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Article</th><th>Qté/Val</th><th>Fournisseur / Contenance</th><th>Seuil</th><th>Prix.U</th><th></th></tr></thead>
+          <thead><tr><th>Article</th><th>Qté/Val</th><th>Fournisseur / Contenance</th><th>Seuil</th><th id="th-prixu">Prix.U HT</th><th></th></tr></thead>
           <tbody id="stock-body"></tbody>
         </table>
       </div>
@@ -994,8 +998,17 @@ function setStockFiltre(f) {
   document.querySelectorAll('#stock-filter button').forEach(b => b.classList.toggle('on', b.dataset.f === f));
   renderStock();
 }
+ const TVA = 1.2;
+let affichagePrix = localStorage.getItem('affichagePrix') === 'TTC' ? 'TTC' : 'HT';
+const prixAff = x => affichagePrix === 'TTC' ? x * TVA : x;
+function majToggleTva() {
+  document.querySelectorAll('#tva-toggle button').forEach(b => b.classList.toggle('on', b.dataset.m === affichagePrix));
+  const th = document.getElementById('th-prixu'); if (th) th.textContent = 'Prix.U ' + affichagePrix;
+}
+function setAffichagePrix(m) { affichagePrix = m; localStorage.setItem('affichagePrix', m); renderStock(); }
 // ================== RENDUS STOCK, ANALYSE & COMMANDES ==================
 function renderStock() {
+   majToggleTva();
   const tbody = document.getElementById('stock-body');
   const filter = document.getElementById('stock-search').value.trim().toLowerCase();
   
@@ -1015,26 +1028,28 @@ function renderStock() {
   fullList.forEach(p => {
     totalItems += p.qte;
     totalValue += (p.qte * p.prixAchat);
+       totalValue += (p.qte * prixAff(p.prixAchat));
   });
 
   tbody.innerHTML = fullList.map(p => {
     const v = p.qte * p.prixAchat;
     const estcommande = codesCommandes.has(String(p.codeBarre));
+    const v = p.qte * prixAff(p.prixAchat);
     
     return `<tr class="${p.qte <= p.seuil ? 'row-alert' : ''}">
       <td>
         ${escapeHtml(p.designation)}<br><span class="muted">${escapeHtml(p.codeBarre)}</span>
         ${estcommande ? '<br><span class="badge-commande">📦 Commandé</span>' : ''}
       </td>
-      <td>${p.qte}<br><span class="muted">${v.toFixed(2)}€ TTC</span></td>
+      <td>${p.qte}<br><span class="muted">${v.toFixed(2)}€ ${affichagePrix}</span></td>
             <td><span class="muted">${escapeHtml(p.fournisseur || 'Non défini')}</span><br><span class="muted">${escapeHtml(p.volume || '')}</span></td>
-      <td>${p.seuil}</td><td>${p.prixAchat.toFixed(2)}€</td>
+      <td>${p.seuil}</td><td>${prixAff(p.prixAchat).toFixed(2)}€</td>
             <td style="text-align:center; white-space:nowrap;"><button class="btn-small btn-ghost" onclick="addToPanierRapide('${p.codeBarre}')">🛒</button> <button class="btn-small btn-ghost" onclick="openModalNouveau('${p.codeBarre}')">✏️</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" class="muted">Aucun article</td></tr>';
 
   document.getElementById('tot-qty').textContent = `${totalItems} (${fullList.length} fiches)`;
-  document.getElementById('tot-val').textContent = totalValue.toFixed(2) + ' € TTC';
+  document.getElementById('tot-val').textContent = totalValue.toFixed(2) + ' € ' + affichagePrix';
 }
 
 // ================== CALENDRIER DE CONSOMMATION ==================
