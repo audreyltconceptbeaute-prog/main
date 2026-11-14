@@ -1676,10 +1676,10 @@ function nvBuild() {
                 inp = `<select data-k="${f.k}" onchange="nvNouveau(this)"><option value=""></option>` +
           lst.map(x => `<option ${x === f.def ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('') +
           `<option value="__new__">＋ Nouvelle valeur…</option></select>`;
-      } else if (f.t === 'step') {
-                inp = `<input type="${f.t === 'number' ? 'number' : 'text'}" ${f.t === 'number' ? 'step="any" min="0" inputmode="decimal"' : ''} ${f.calc ? 'oninput="nvCalc(this)"' : ''} data-k="${f.k}" ${f.id ? 'id="' + f.id + '"' : ''}>`;
+            } else if (f.t === 'step') {
+        inp = `<div class="nv-step"><button type="button" onclick="nvStep(this,-1)">−</button><input type="number" min="0" data-k="${f.k}" value="${f.def}"><button type="button" onclick="nvStep(this,1)">+</button></div>`;
       } else {
-        inp = `<input type="${f.t === 'number' ? 'number' : 'text'}" ${f.t === 'number' ? 'step="any" min="0" inputmode="decimal"' : ''} ${f.pct ? 'data-pct="1"' : ''} data-k="${f.k}" ${f.id ? 'id="' + f.id + '"' : ''}>`;
+        inp = `<input type="${f.t === 'number' ? 'number' : 'text'}" ${f.t === 'number' ? 'step="any" min="0" inputmode="decimal"' : ''} ${f.calc ? 'oninput="nvCalc(this)"' : ''} data-k="${f.k}" ${f.id ? 'id="' + f.id + '"' : ''}>`;
       }
       return `<div class="${cls}"><label>${f.l}${f.req ? ' *' : ''}</label>${inp}</div>`;
     }).join('') + `</div></details>`).join('');
