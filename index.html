@@ -394,6 +394,7 @@
     </div>
     <div id="nv-body"></div>
     <div class="modal-actions">
+           <button class="btn-secondary" id="nv-btn-ajust" style="display:none" onclick="ajusterDepuisFiche()">Ajuster le stock</button>
       <button class="btn-secondary" onclick="closeModal('modal-nouveau')">Annuler</button>
       <button class="btn-primary" onclick="submitNouveau()">Créer la fiche</button>
     </div>
@@ -1007,7 +1008,7 @@ function renderStock() {
       <td>${p.qte}<br><span class="muted">${v.toFixed(2)}€ TTC</span></td>
       <td><span class="muted">${escapeHtml(p.fournisseur || 'Non défini')}</span></td>
       <td>${p.seuil}</td><td>${p.prixAchat.toFixed(2)}€</td>
-      <td style="text-align:center;"><button class="btn-small btn-ghost" onclick="openModalAjust('${p.codeBarre}')">✏️</button></td>
+      <td style="text-align:center;"><button class="btn-small btn-ghost" onclick="openModalNouveau('${p.codeBarre}')">✏️</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" class="muted">Aucun article</td></tr>';
 
@@ -1680,31 +1681,67 @@ function nvSetType(t) {
   m.querySelectorAll('.nv-seg button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
 }
 
-function openModalNouveau(code) {
-  nvBuild();
-  document.getElementById('new-code').value = code || '';
+let nvEdit = null;
+
+async function openModalNouveau(code) {
+  nvBuild(); nvEdit = null;
+  document.querySelector('#modal-nouveau h3').textContent = 'Nouvel article';
+  document.getElementById('nv-btn-ajust').style.display = 'none';
+  const seg = document.querySelector('#modal-nouveau .nv-seg'); seg.style.pointerEvents = ''; seg.style.opacity = '';
+  const cEl = document.getElementById('new-code'); cEl.value = code || ''; cEl.disabled = false;
   nvSetType('consommable');
   showModal('modal-nouveau');
-  const cible = code ? document.querySelector('#nv-body [data-k="Nom produit"]') : document.getElementById('new-code');
+  if (code && state.produits.find(x => x.codeBarre === code)) { await nvCharger(code); return; }
+  const cible = code ? document.querySelector('#nv-body [data-k="Nom produit"]') : cEl;
   if (cible) cible.focus();
 }
+
+async function nvCharger(code) {
+  setGlobalLoading(true);
+  try {
+    const r = await (await fetchWithTimeout(API_URL + '?action=getProduit&code=' + encodeURIComponent(code))).json();
+    if (r.error) throw new Error(r.error);
+    nvEdit = code;
+    const ch = {}; Object.keys(r.champs).forEach(k => ch[nrm(k)] = r.champs[k]);
+    nvSetType(nrm(ch['destination']).indexOf('vente') >= 0 ? 'vente' : 'consommable');
+    document.querySelectorAll('#nv-body [data-k]').forEach(el => {
+      let v = ch[nrm(el.dataset.k)]; if (v === undefined || v === null) v = '';
+      if (el.dataset.pct && v !== '') v = Math.round(Number(v) * 10000) / 100;
+      if (el.tagName === 'SELECT' && v !== '' && ![...el.options].some(o => o.value === String(v))) {
+        const op = document.createElement('option'); op.textContent = v; el.insertBefore(op, el.lastElementChild);
+      }
+      el.value = v;
+    });
+    document.querySelector('#modal-nouveau h3').textContent = "Modifier l'article";
+    document.getElementById('new-code').disabled = true;
+    const st = document.querySelector('#nv-body [data-k="stock"]');
+    if (st) { st.disabled = true; st.closest('.nv-step').querySelectorAll('button').forEach(b => b.disabled = true); }
+    document.getElementById('nv-btn-ajust').style.display = '';
+    const seg = document.querySelector('#modal-nouveau .nv-seg'); seg.style.pointerEvents = 'none'; seg.style.opacity = '.6';
+  } catch (e) { toast('Erreur : ' + e.message); closeModal('modal-nouveau'); }
+  finally { setGlobalLoading(false); }
+}
+
+function ajusterDepuisFiche() { const c = nvEdit; closeModal('modal-nouveau'); openModalAjust(c); }
 
 async function submitNouveau() {
   const type = document.querySelector('#modal-nouveau .nv').dataset.type;
   const champs = { destination: type };
   document.querySelectorAll('#nv-body [data-k]').forEach(el => {
+    if (el.disabled) return;
     if (el.closest('.only-vente') && type !== 'vente') return;
     if (el.closest('.only-conso') && type !== 'consommable') return;
     let v = String(el.value).trim();
-    if (!v || v.indexOf('__') === 0) return;
+    if (v.indexOf('__') === 0) return;
+    if (!v) { if (nvEdit) champs[el.dataset.k] = ''; return; }
     champs[el.dataset.k] = el.dataset.pct ? Number(v) / 100 : (el.type === 'number' ? Number(v) : v);
   });
-  const codeBarre = champs['Codebarre'];
-  if (!codeBarre) { toast('Code requis'); return; }
-  if (state.produits.find(x => x.codeBarre === codeBarre)) { toast('Code déjà existant'); return; }
+  champs['Codebarre'] = nvEdit || document.getElementById('new-code').value.trim();
+  if (!champs['Codebarre']) { toast('Code requis'); return; }
+  if (!nvEdit && state.produits.find(x => x.codeBarre === champs['Codebarre'])) { toast('Code déjà existant'); return; }
   if (!champs['Nom produit']) { toast('Nom du produit requis'); return; }
   closeModal('modal-nouveau'); setGlobalLoading(true);
-  try { const res = await apiPost('upsertProduct', { champs }); if (res.error) throw new Error(res.error); toast('Article créé ✔'); await loadData(); }
+  try { const res = await apiPost('upsertProduct', { champs }); if (res.error) throw new Error(res.error); toast(nvEdit ? 'Article modifié ✔' : 'Article créé ✔'); await loadData(); }
   catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
 }
 
