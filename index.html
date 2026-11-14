@@ -1662,8 +1662,9 @@ function nvBuild() {
       const o = on[nrm(f.k)], lst = o ? o.l : f.liste;
       let inp;
       if (lst) {
-        inp = `<select data-k="${f.k}"><option value=""></option>` +
-          lst.map(x => `<option ${x === f.def ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('') + `</select>`;
+                inp = `<select data-k="${f.k}" onchange="nvNouveau(this)"><option value=""></option>` +
+          lst.map(x => `<option ${x === f.def ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('') +
+          `<option value="__new__">＋ Nouvelle valeur…</option></select>`;
       } else if (f.t === 'step') {
         inp = `<div class="nv-step"><button type="button" onclick="nvStep(this,-1)">−</button><input type="number" min="0" data-k="${f.k}" value="${f.def}"><button type="button" onclick="nvStep(this,1)">+</button></div>`;
       } else {
@@ -1696,7 +1697,7 @@ async function submitNouveau() {
     if (el.closest('.only-vente') && type !== 'vente') return;
     if (el.closest('.only-conso') && type !== 'consommable') return;
     let v = String(el.value).trim();
-    if (!v || v === '__autre__') return;
+    if (!v || v.indexOf('__') === 0) return;
     champs[el.dataset.k] = el.dataset.pct ? Number(v) / 100 : (el.type === 'number' ? Number(v) : v);
   });
   const codeBarre = champs['Codebarre'];
@@ -1709,7 +1710,20 @@ async function submitNouveau() {
 }
 
 
-
+async function nvNouveau(sel) {
+  if (sel.value !== '__new__') return;
+  const v = (prompt('Nouvelle valeur pour « ' + sel.dataset.k + ' » :') || '').trim();
+  if (!v) { sel.value = ''; return; }
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('addOption', { champ: sel.dataset.k, valeur: v });
+    if (res.error) throw new Error(res.error);
+    const op = document.createElement('option'); op.textContent = res.valeur;
+    sel.insertBefore(op, sel.lastElementChild); sel.value = res.valeur;
+    toast('Ajouté dans matrice ✔');
+  } catch (e) { toast('Erreur : ' + e.message); sel.value = ''; }
+  finally { setGlobalLoading(false); }
+}
 function openModalAjust(code) {
   const p = state.produits.find(x => x.codeBarre === code); if (!p) return;
   document.getElementById('modal-ajust').dataset.code = code;
