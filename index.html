@@ -1719,7 +1719,7 @@ async function nvCharger(code) {
     nvSetType(nrm(ch['destination']).indexOf('vente') >= 0 ? 'vente' : 'consommable');
     document.querySelectorAll('#nv-body [data-k]').forEach(el => {
       let v = ch[nrm(el.dataset.k)]; if (v === undefined || v === null) v = '';
-      if (el.dataset.pct && v !== '') v = Math.round(Number(v) * 10000) / 100;
+     
       if (el.tagName === 'SELECT' && v !== '' && ![...el.options].some(o => o.value === String(v))) {
         const op = document.createElement('option'); op.textContent = v; el.insertBefore(op, el.lastElementChild);
       }
@@ -1747,7 +1747,7 @@ async function submitNouveau() {
     let v = String(el.value).trim();
     if (v.indexOf('__') === 0) return;
     if (!v) { if (nvEdit) champs[el.dataset.k] = ''; return; }
-    champs[el.dataset.k] = el.dataset.pct ? Number(v) / 100 : (el.type === 'number' ? Number(v) : v);
+        champs[el.dataset.k] = el.type === 'number' ? Number(v) : v;
   });
   champs['Codebarre'] = nvEdit || document.getElementById('new-code').value.trim();
   if (!champs['Codebarre']) { toast('Code requis'); return; }
