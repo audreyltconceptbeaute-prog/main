@@ -153,6 +153,9 @@
   .nv-step input { text-align:center; }
   .nv[data-type="consommable"] .only-vente { display:none; }
   .nv[data-type="vente"] .only-conso { display:none; }
+   .stock-filter { display:flex; background:#e5e5ea; border-radius:9px; padding:2px; margin-bottom:6px; flex-shrink:0; }
+  .stock-filter button { flex:1; border:0; background:transparent; padding:6px; border-radius:7px; font-weight:600; font-size:12px; color:#3c3c43; }
+  .stock-filter button.on { background:#fff; color:#007aff; box-shadow:0 1px 3px rgba(0,0,0,.15); }
   .modal-actions { display: flex; gap: 6px; margin-top: 10px; }
   #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1c1c1e; color: #fff; padding: 8px 14px; border-radius: 16px; font-size: 12px; opacity: 0; transition: all 0.25s; z-index: 200; max-width: 90vw; text-align: center; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -220,6 +223,11 @@
       <div class="stock-summary" id="stock-summary">
         <span>Quantité totale : <span id="tot-qty">0</span></span>
         <span>Valeur : <span id="tot-val">0.00 € TTC</span></span>
+      </div>
+           <div class="stock-filter">
+        <button data-f="vente" onclick="setStockFiltre('vente')">Vente</button>
+        <button data-f="consommable" onclick="setStockFiltre('consommable')">Consommable</button>
+        <button data-f="tous" class="on" onclick="setStockFiltre('tous')">Tous</button>
       </div>
       <div class="table-scroll">
         <table>
@@ -972,7 +980,12 @@ function renderReceptionTable() {
     </tr>`;
   }).join('');
 }
-
+let stockFiltre = 'tous';
+function setStockFiltre(f) {
+  stockFiltre = f;
+  document.querySelectorAll('.stock-filter button').forEach(b => b.classList.toggle('on', b.dataset.f === f));
+  renderStock();
+}
 // ================== RENDUS STOCK, ANALYSE & COMMANDES ==================
 function renderStock() {
   const tbody = document.getElementById('stock-body');
@@ -989,7 +1002,7 @@ function renderStock() {
     });
   });
 
-  const fullList = state.produits.filter(p => !filter || p.codeBarre.toLowerCase().includes(filter) || (p.designation || '').toLowerCase().includes(filter) || (p.fournisseur || '').toLowerCase().includes(filter)).sort((a,b) => (a.designation||'').localeCompare(b.designation||''));
+  let fullList = state.produits.filter(p => !filter || p.codeBarre.toLowerCase().includes(filter) || (p.designation || '').toLowerCase().includes(filter) || (p.fournisseur || '').toLowerCase().includes(filter)).sort((a,b) => (a.designation||'').localeCompare(b.designation||''));  if (stockFiltre !== 'tous') fullList = fullList.filter(p => String(p.type || '').toLowerCase() === stockFiltre);
 
   fullList.forEach(p => {
     totalItems += p.qte;
