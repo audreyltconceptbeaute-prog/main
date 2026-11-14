@@ -399,8 +399,6 @@
     </div>
   </div>
 </div>
-</div>
-
 <div class="modal-overlay" id="modal-ajust">
   <div class="modal-card">
     <h3>Modifier l'article</h3>
@@ -565,7 +563,7 @@
 // ================== CONFIG ==================
 const API_URL = 'https://script.google.com/macros/s/AKfycbxHnFz6sud2ws0Oa5Nv4mORRDgt7ljujj5inZPxRwuwDWp2PEDFzIF8fIE-JxqumWuU/exec';
 
-let state = { produits: [], historique: [], config: {}, brouillons: [], commandesEnCours: [] };
+let state = { produits: [], historique: [], config: {}, brouillons: [], commandesEnCours: [], options: {} };
 let panier = [];
 let currentMode = 'entree';
 let dataLoaded = false;
@@ -771,8 +769,10 @@ async function loadData(silent = false) {
       produits: data.produits || [], 
       historique: data.historique || [], 
       config: data.config || {}, 
-      brouillons: data.brouillons || [],
-      commandesEnCours: data.commandesEnCours || []
+            brouillons: data.brouillons || [],
+      commandesEnCours: data.commandesEnCours || [],
+      options: data.options || {}
+    };
     };
     dataLoaded = true;
     
