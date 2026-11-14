@@ -136,6 +136,23 @@
   .modal-card { background: #fff; border-radius: 12px; padding: 12px; width: 100%; max-width: 360px; max-height: 90vh; overflow-y: auto; }
   .modal-card h3 { margin: 0 0 6px 0; font-size: 14px; }
   .modal-card-large { max-width: 440px; }
+   .nv-seg { display:flex; background:#e5e5ea; border-radius:9px; padding:2px; margin:6px 0 8px; }
+  .nv-seg button { flex:1; border:0; background:transparent; padding:7px; border-radius:7px; font-weight:600; font-size:13px; color:#3c3c43; }
+  .nv-seg button.on { background:#fff; color:#007aff; box-shadow:0 1px 3px rgba(0,0,0,.15); }
+  .nv-sec { border:1px solid #e5e5ea; border-radius:10px; margin-bottom:8px; overflow:hidden; }
+  .nv-sec > summary { padding:10px 12px; font-weight:600; font-size:13px; background:#f2f2f7; cursor:pointer; list-style:none; display:flex; justify-content:space-between; }
+  .nv-sec > summary::-webkit-details-marker { display:none; }
+  .nv-sec > summary::after { content:'▸'; color:#8e8e93; }
+  .nv-sec[open] > summary::after { content:'▾'; }
+  .nv-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px 12px; }
+  .nv-grid .full { grid-column:1/-1; }
+  .nv-grid label { display:block; font-size:11px; color:#6c6c70; margin:0 0 3px; }
+  .nv-grid input, .nv-grid select { width:100%; box-sizing:border-box; }
+  .nv-step { display:flex; gap:4px; }
+  .nv-step button { width:38px; border:0; border-radius:8px; background:#e5e5ea; font-size:18px; font-weight:700; }
+  .nv-step input { text-align:center; }
+  .nv[data-type="consommable"] .only-vente { display:none; }
+  .nv[data-type="vente"] .only-conso { display:none; }
   .modal-actions { display: flex; gap: 6px; margin-top: 10px; }
   #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1c1c1e; color: #fff; padding: 8px 14px; border-radius: 16px; font-size: 12px; opacity: 0; transition: all 0.25s; z-index: 200; max-width: 90vw; text-align: center; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -369,21 +386,19 @@
 </div>
 
 <div class="modal-overlay" id="modal-nouveau">
-  <div class="modal-card">
+  <div class="modal-card modal-card-large nv" data-type="consommable">
     <h3>Nouvel article</h3>
-    <label>Code barre</label><input type="text" id="new-code" placeholder="Saisir ou scanner un code">
-    <label>Désignation</label><input type="text" id="new-designation" placeholder="Nom du produit">
-    <label>Quantité initiale</label><input type="number" id="new-qte" min="0" value="0">
-    <label>Prix d'achat (€ TTC)</label><input type="number" id="new-prix" min="0" step="0.01" value="0">
-    <label>Fournisseur associé</label>
-    <select id="new-fournisseur"></select>
-    <label>Contenance</label><input type="text" id="new-contenance" placeholder="ex: carton de 12">
-    <label>Seuil critique</label><input type="number" id="new-seuil" min="0" value="0">
+    <div class="nv-seg">
+      <button type="button" data-t="consommable" class="on" onclick="nvSetType('consommable')">Consommable</button>
+      <button type="button" data-t="vente" onclick="nvSetType('vente')">Produit de vente</button>
+    </div>
+    <div id="nv-body"></div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('modal-nouveau')">Annuler</button>
       <button class="btn-primary" onclick="submitNouveau()">Créer la fiche</button>
     </div>
   </div>
+</div>
 </div>
 
 <div class="modal-overlay" id="modal-ajust">
@@ -1587,31 +1602,85 @@ function removeFromPanier(i) { panier.splice(i, 1); renderPanier(); }
 
 function showModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+const NV_SECTIONS = [
+  { titre: 'Identification', ouvert: true, champs: [
+    { k: 'Codebarre', l: 'Code barre', id: 'new-code', req: 1, full: 1 },
+    { k: 'Nom produit', l: 'Nom du produit', req: 1, full: 1 },
+    { k: 'Marque', l: 'Marque / Fournisseur', t: 'select' },
+    { k: 'Catégorie', l: 'Catégorie', t: 'select' },
+    { k: 'Code', l: 'Code interne' }
+  ]},
+  { titre: 'Stock', ouvert: true, champs: [
+    { k: 'stock', l: 'Quantité initiale', t: 'step', def: 1 },
+    { k: 'seuil réappro', l: 'Seuil critique', t: 'step', def: 1 }
+  ]}
+];
+
+function nvBuild() {
+  const o = state.options || {};
+  let frs = [];
+  try { frs = JSON.parse(state.config.fournisseurs || '[]').map(x => x.nom); } catch (e) {}
+  document.getElementById('nv-body').innerHTML = NV_SECTIONS.map(s =>
+    `<details class="nv-sec ${s.v ? 'only-vente' : ''}" ${s.ouvert ? 'open' : ''}><summary>${s.titre}</summary><div class="nv-grid">` +
+    s.champs.map(f => {
+      const cls = (f.full ? 'full ' : '') + (f.v ? 'only-vente ' : '') + (f.c ? 'only-conso ' : '');
+      let inp;
+      if (f.t === 'select') {
+        let l = (o[f.k] || []).concat(f.k === 'Marque' ? frs : []);
+        l = l.filter((x, i) => x && l.indexOf(x) === i);
+        inp = `<select data-k="${f.k}" onchange="nvAutre(this)"><option value=""></option>` +
+          l.map(x => `<option>${escapeHtml(x)}</option>`).join('') + `<option value="__autre__">＋ Autre…</option></select>`;
+      } else if (f.t === 'step') {
+        inp = `<div class="nv-step"><button type="button" onclick="nvStep(this,-1)">−</button><input type="number" min="0" data-k="${f.k}" value="${f.def}"><button type="button" onclick="nvStep(this,1)">+</button></div>`;
+      } else {
+        inp = `<input type="${f.t || 'text'}" ${f.t === 'number' ? 'step="any" min="0"' : ''} data-k="${f.k}" ${f.id ? 'id="' + f.id + '"' : ''}>`;
+      }
+      return `<div class="${cls}"><label>${f.l}${f.req ? ' *' : ''}</label>${inp}</div>`;
+    }).join('') + `</div></details>`).join('');
+}
+
+function nvAutre(sel) {
+  if (sel.value !== '__autre__') return;
+  const v = (prompt('Nouvelle valeur :') || '').trim();
+  if (v) { const op = document.createElement('option'); op.textContent = v; sel.insertBefore(op, sel.lastElementChild); sel.value = v; }
+  else sel.value = '';
+}
+function nvStep(btn, d) { const i = btn.parentNode.querySelector('input'); i.value = Math.max(0, (Number(i.value) || 0) + d); }
+function nvSetType(t) {
+  const m = document.getElementById('modal-nouveau');
+  m.querySelector('.nv').dataset.type = t;
+  m.querySelectorAll('.nv-seg button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+}
+
 function openModalNouveau(code) {
+  nvBuild();
   document.getElementById('new-code').value = code || '';
-  ['designation','qte','prix','contenance','seuil'].forEach(id => document.getElementById('new-'+id).value = (id==='qte'||id==='prix'||id==='seuil')?0:'');
-  populateFournisseursSelects();
-  document.getElementById('new-fournisseur').value = '';
+  nvSetType('consommable');
   showModal('modal-nouveau');
+  const cible = code ? document.querySelector('#nv-body [data-k="Nom produit"]') : document.getElementById('new-code');
+  if (cible) cible.focus();
 }
 
 async function submitNouveau() {
-  const codeBarre = document.getElementById('new-code').value.trim(); if (!codeBarre) { toast('Code requis'); return; }
+  const type = document.querySelector('#modal-nouveau .nv').dataset.type;
+  const champs = { destination: type };
+  document.querySelectorAll('#nv-body [data-k]').forEach(el => {
+    if (el.closest('.only-vente') && type !== 'vente') return;
+    if (el.closest('.only-conso') && type !== 'consommable') return;
+    let v = String(el.value).trim();
+    if (!v || v === '__autre__') return;
+    champs[el.dataset.k] = el.type === 'number' ? Number(v) : v;
+  });
+  const codeBarre = champs['Codebarre'];
+  if (!codeBarre) { toast('Code requis'); return; }
   if (state.produits.find(x => x.codeBarre === codeBarre)) { toast('Code déjà existant'); return; }
-  const designation = document.getElementById('new-designation').value.trim(); if (!designation) { toast('Désignation requise'); return; }
-  const data = { 
-    codeBarre, 
-    designation, 
-    qte: Number(document.getElementById('new-qte').value)||0, 
-    prixAchat: Number(document.getElementById('new-prix').value)||0, 
-    fournisseur: document.getElementById('new-fournisseur').value,
-    contenance: document.getElementById('new-contenance').value.trim(), 
-    seuil: Number(document.getElementById('new-seuil').value)||0 
-  };
+  if (!champs['Nom produit']) { toast('Nom du produit requis'); return; }
   closeModal('modal-nouveau'); setGlobalLoading(true);
-  try { const res = await apiPost('upsertProduct', data); if (res.error) throw new Error(res.error); toast('Article créé ✔'); await loadData(); }
+  try { const res = await apiPost('upsertProduct', { champs }); if (res.error) throw new Error(res.error); toast('Article créé ✔'); await loadData(); }
   catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
 }
+
+
 
 function openModalAjust(code) {
   const p = state.produits.find(x => x.codeBarre === code); if (!p) return;
