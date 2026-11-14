@@ -412,7 +412,7 @@
     <div class="modal-actions">
            <button class="btn-secondary" id="nv-btn-ajust" style="display:none" onclick="ajusterDepuisFiche()">Ajuster le stock</button>
       <button class="btn-secondary" onclick="closeModal('modal-nouveau')">Annuler</button>
-      <button class="btn-primary" onclick="submitNouveau()">Créer la fiche</button>
+            <button class="btn-primary" id="nv-btn-submit" onclick="submitNouveau()">Créer la fiche</button>
     </div>
   </div>
 </div>
@@ -1717,6 +1717,7 @@ let nvEdit = null;
 async function openModalNouveau(code) {
   nvBuild(); nvEdit = null;
   document.querySelector('#modal-nouveau h3').textContent = 'Nouvel article';
+   document.getElementById('nv-btn-submit').textContent = 'Créer la fiche';
   document.getElementById('nv-btn-ajust').style.display = 'none';
   const seg = document.querySelector('#modal-nouveau .nv-seg'); seg.style.pointerEvents = ''; seg.style.opacity = '';
   const cEl = document.getElementById('new-code'); cEl.value = code || ''; cEl.disabled = false;
@@ -1745,6 +1746,7 @@ async function nvCharger(code) {
             el.value = v; el.dataset.init = el.value;
     });
     document.querySelector('#modal-nouveau h3').textContent = "Modifier l'article";
+       document.getElementById('nv-btn-submit').textContent = 'Modifier la fiche';
     document.getElementById('new-code').disabled = true;
     const st = document.querySelector('#nv-body [data-k="stock"]');
     if (st) { st.disabled = true; st.closest('.nv-step').querySelectorAll('button').forEach(b => b.disabled = true); }
