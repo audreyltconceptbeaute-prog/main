@@ -1644,37 +1644,35 @@ const NV_SECTIONS = [
   ]}
 ];
 
+const nrm = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+
 function nvBuild() {
-  const o = state.options || {};
-  let frs = [];
-  try { frs = JSON.parse(state.config.fournisseurs || '[]').map(x => x.nom); } catch (e) {}
-  document.getElementById('nv-body').innerHTML = NV_SECTIONS.map(s =>
+  const on = {};
+  Object.keys(state.options || {}).forEach(k => { on[nrm(k)] = { nom: k, l: state.options[k] }; });
+  const places = {};
+  NV_SECTIONS.forEach(s => s.champs.forEach(f => { if (f.k) places[nrm(f.k)] = 1; }));
+  const extra = Object.keys(on).filter(k => !places[k] && k !== 'destination')
+    .map(k => ({ k: on[k].nom, l: on[k].nom.replace(/_/g, ' '), full: 1 }));
+  const secs = NV_SECTIONS.concat(extra.length ? [{ titre: 'Autres champs', champs: extra }] : []);
+  document.getElementById('nv-body').innerHTML = secs.map(s =>
     `<details class="nv-sec ${s.v ? 'only-vente' : ''}" ${s.ouvert ? 'open' : ''}><summary>${s.titre}</summary><div class="nv-grid">` +
     s.champs.map(f => {
       const cls = (f.full ? 'full ' : '') + (f.v ? 'only-vente ' : '') + (f.c ? 'only-conso ' : '');
       if (f.t === 'note') return `<div class="${cls}" style="font-size:11px;color:#8e8e93">${f.l}</div>`;
+      const o = on[nrm(f.k)], lst = o ? o.l : f.liste;
       let inp;
-      if (f.t === 'select') {
-        let l = f.liste || (o[f.k] || []).concat(f.k === 'Marque' ? frs : []);
-        l = l.filter((x, i) => x && l.indexOf(x) === i);
-        inp = `<select data-k="${f.k}" ${f.fixe ? '' : 'onchange="nvAutre(this)"'}><option value=""></option>` +
-          l.map(x => `<option ${x === f.def ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('') +
-          (f.fixe ? '' : `<option value="__autre__">＋ Autre…</option>`) + `</select>`;
+      if (lst) {
+        inp = `<select data-k="${f.k}"><option value=""></option>` +
+          lst.map(x => `<option ${x === f.def ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('') + `</select>`;
       } else if (f.t === 'step') {
         inp = `<div class="nv-step"><button type="button" onclick="nvStep(this,-1)">−</button><input type="number" min="0" data-k="${f.k}" value="${f.def}"><button type="button" onclick="nvStep(this,1)">+</button></div>`;
       } else {
-        inp = `<input type="${f.t || 'text'}" ${f.t === 'number' ? 'step="any" min="0" inputmode="decimal"' : ''} ${f.pct ? 'data-pct="1"' : ''} data-k="${f.k}" ${f.id ? 'id="' + f.id + '"' : ''}>`;
+        inp = `<input type="${f.t === 'number' ? 'number' : 'text'}" ${f.t === 'number' ? 'step="any" min="0" inputmode="decimal"' : ''} ${f.pct ? 'data-pct="1"' : ''} data-k="${f.k}" ${f.id ? 'id="' + f.id + '"' : ''}>`;
       }
       return `<div class="${cls}"><label>${f.l}${f.req ? ' *' : ''}</label>${inp}</div>`;
     }).join('') + `</div></details>`).join('');
 }
 
-function nvAutre(sel) {
-  if (sel.value !== '__autre__') return;
-  const v = (prompt('Nouvelle valeur :') || '').trim();
-  if (v) { const op = document.createElement('option'); op.textContent = v; sel.insertBefore(op, sel.lastElementChild); sel.value = v; }
-  else sel.value = '';
-}
 function nvStep(btn, d) { const i = btn.parentNode.querySelector('input'); i.value = Math.max(0, (Number(i.value) || 0) + d); }
 function nvSetType(t) {
   const m = document.getElementById('modal-nouveau');
