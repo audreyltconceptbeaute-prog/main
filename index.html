@@ -153,6 +153,9 @@
   .nv-step input { text-align:center; }
   .nv[data-type="consommable"] .only-vente { display:none; }
   .nv[data-type="vente"] .only-conso { display:none; }
+   .nv { position: relative; }
+  .nv-loading { display:none; position:absolute; inset:0; background:rgba(255,255,255,.93); z-index:5; align-items:center; justify-content:center; flex-direction:column; border-radius:12px; }
+  .nv-loading.show { display:flex; }
    .stock-filter { display:flex; background:#e5e5ea; border-radius:9px; padding:2px; margin-bottom:6px; flex-shrink:0; }
   .stock-filter button { flex:1; border:0; background:transparent; padding:6px; border-radius:7px; font-weight:600; font-size:12px; color:#3c3c43; }
   .stock-filter button.on { background:#fff; color:#007aff; box-shadow:0 1px 3px rgba(0,0,0,.15); }
@@ -399,6 +402,7 @@
 
 <div class="modal-overlay" id="modal-nouveau">
   <div class="modal-card modal-card-large nv" data-type="consommable">
+       <div class="nv-loading" id="nv-loading"><div class="loading-spinner"></div><div class="loading-text">Chargement de la fiche…</div></div>
     <h3>Nouvel article</h3>
     <div class="nv-seg">
       <button type="button" data-t="consommable" class="on" onclick="nvSetType('consommable')">Consommable</button>
@@ -1717,6 +1721,7 @@ async function openModalNouveau(code) {
   const seg = document.querySelector('#modal-nouveau .nv-seg'); seg.style.pointerEvents = ''; seg.style.opacity = '';
   const cEl = document.getElementById('new-code'); cEl.value = code || ''; cEl.disabled = false;
   nvSetType('consommable');
+    if (code && state.produits.find(x => x.codeBarre === code)) document.getElementById('nv-loading').classList.add('show');
   showModal('modal-nouveau');
   if (code && state.produits.find(x => x.codeBarre === code)) { await nvCharger(code); return; }
   const cible = code ? document.querySelector('#nv-body [data-k="Nom produit"]') : cEl;
@@ -1746,7 +1751,7 @@ async function nvCharger(code) {
     document.getElementById('nv-btn-ajust').style.display = '';
     const seg = document.querySelector('#modal-nouveau .nv-seg'); seg.style.pointerEvents = 'none'; seg.style.opacity = '.6';
   } catch (e) { toast('Erreur : ' + e.message); closeModal('modal-nouveau'); }
-  finally { setGlobalLoading(false); }
+    finally { setGlobalLoading(false); document.getElementById('nv-loading').classList.remove('show'); }
 }
 function nvCalc(el) {
   const g = k => document.querySelector('#nv-body [data-k="' + k + '"]');
