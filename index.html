@@ -1395,7 +1395,7 @@ async function applySeuil(code, seuil) {
     toast('Seuil mis à jour ✔'); await loadData();
   } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
 }
-
+function fournisseurNoms() { try { return JSON.parse(state.config.fournisseurs || '[]').map(f => f.nom).filter(Boolean); } catch (e) { return []; } }
 function renderSuggestions() {
   const tbody = document.getElementById('suggestions-body');
   
@@ -1635,6 +1635,7 @@ const NV_SECTIONS = [
     { k: 'Codebarre', l: 'Code barre', id: 'new-code', req: 1, full: 1 },
     { k: 'Nom produit', l: 'Nom du produit', req: 1, full: 1 },
     { k: 'Marque', l: 'Marque / Fournisseur', t: 'select' },
+       { k: 'Fournisseur', l: 'Fournisseur', t: 'select', fixe: 1, liste: fournisseurNoms },
     { k: 'Catégorie', l: 'Catégorie', t: 'select' },
     { k: 'Code', l: 'Code interne (sert à la photo)', full: 1 }
   ]},
@@ -1685,12 +1686,12 @@ function nvBuild() {
     s.champs.map(f => {
       const cls = (f.full ? 'full ' : '') + (f.v ? 'only-vente ' : '') + (f.c ? 'only-conso ' : '');
       if (f.t === 'note') return `<div class="${cls}" style="font-size:11px;color:#8e8e93">${f.l}</div>`;
-      const o = on[nrm(f.k)], lst = o ? o.l : f.liste;
+            const o = on[nrm(f.k)], lst = o ? o.l : (typeof f.liste === 'function' ? f.liste() : f.liste);
       let inp;
       if (lst) {
-                inp = `<select data-k="${f.k}" onchange="nvNouveau(this)"><option value=""></option>` +
+                        inp = `<select data-k="${f.k}" ${f.fixe ? '' : 'onchange="nvNouveau(this)"'}><option value=""></option>` +
           lst.map(x => `<option ${x === f.def ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('') +
-          `<option value="__new__">＋ Nouvelle valeur…</option></select>`;
+          (f.fixe ? '' : `<option value="__new__">＋ Nouvelle valeur…</option>`) + `</select>`;
             } else if (f.t === 'step') {
         inp = `<div class="nv-step"><button type="button" onclick="nvStep(this,-1)">−</button><input type="number" min="0" data-k="${f.k}" value="${f.def}"><button type="button" onclick="nvStep(this,1)">+</button></div>`;
       } else {
