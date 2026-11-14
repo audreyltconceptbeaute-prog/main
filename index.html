@@ -224,7 +224,7 @@
         <span>Quantité totale : <span id="tot-qty">0</span></span>
         <span>Valeur : <span id="tot-val">0.00 € TTC</span></span>
       </div>
-           <div class="stock-filter">
+                 <div class="stock-filter" id="stock-filter">
         <button data-f="vente" onclick="setStockFiltre('vente')">Vente</button>
         <button data-f="consommable" class="on" onclick="setStockFiltre('consommable')">Consommable</button>
         <button data-f="tous" onclick="setStockFiltre('tous')">Tous</button>
@@ -338,6 +338,10 @@
             <option value="1.5">50%</option>
           </select>
         </div>
+      </div>
+           <div class="stock-filter" id="analyse-filter">
+        <button data-f="consommable" class="on" onclick="setAnalyseFiltre('consommable')">Consommable</button>
+        <button data-f="vente" onclick="setAnalyseFiltre('vente')">Vente</button>
       </div>
       <div id="conso-chart-wrap">
         <div id="conso-chart-title">Top Consommation (12 derniers mois)</div>
@@ -983,7 +987,7 @@ function renderReceptionTable() {
 let stockFiltre = 'consommable';
 function setStockFiltre(f) {
   stockFiltre = f;
-  document.querySelectorAll('.stock-filter button').forEach(b => b.classList.toggle('on', b.dataset.f === f));
+  document.querySelectorAll('#stock-filter button').forEach(b => b.classList.toggle('on', b.dataset.f === f));
   renderStock();
 }
 // ================== RENDUS STOCK, ANALYSE & COMMANDES ==================
@@ -1136,7 +1140,12 @@ async function loadAnalyseData() {
   }
   renderAnalyse();
 }
-
+let analyseFiltre = 'consommable';
+function setAnalyseFiltre(f) {
+  analyseFiltre = f;
+  document.querySelectorAll('#analyse-filter button').forEach(b => b.classList.toggle('on', b.dataset.f === f));
+  renderAnalyse();
+}
 function renderAnalyse() {
   const tbody = document.getElementById('analyse-body');
   const extraWeeksCoverage = Number(document.getElementById('analyse-couverture').value) || 2;
@@ -1160,7 +1169,7 @@ function renderAnalyse() {
     }
   });
 
-  const list = state.produits.map(p => {
+    const list = state.produits.filter(p => String(p.type || '').toLowerCase() === analyseFiltre).map(p => {
     const tot12m = conso12m[p.codeBarre] || 0;
     const tot30d = conso30d[p.codeBarre] || 0;
     
