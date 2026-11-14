@@ -226,8 +226,8 @@
       </div>
            <div class="stock-filter">
         <button data-f="vente" onclick="setStockFiltre('vente')">Vente</button>
-        <button data-f="consommable" onclick="setStockFiltre('consommable')">Consommable</button>
-        <button data-f="tous" class="on" onclick="setStockFiltre('tous')">Tous</button>
+        <button data-f="consommable" class="on" onclick="setStockFiltre('consommable')">Consommable</button>
+        <button data-f="tous" onclick="setStockFiltre('tous')">Tous</button>
       </div>
       <div class="table-scroll">
         <table>
@@ -980,7 +980,7 @@ function renderReceptionTable() {
     </tr>`;
   }).join('');
 }
-let stockFiltre = 'tous';
+let stockFiltre = 'consommable';
 function setStockFiltre(f) {
   stockFiltre = f;
   document.querySelectorAll('.stock-filter button').forEach(b => b.classList.toggle('on', b.dataset.f === f));
