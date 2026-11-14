@@ -1008,10 +1008,10 @@ function majToggleTva() {
 function setAffichagePrix(m) { affichagePrix = m; localStorage.setItem('affichagePrix', m); renderStock(); }
 // ================== RENDUS STOCK, ANALYSE & COMMANDES ==================
 function renderStock() {
-   majToggleTva();
+  majToggleTva();
   const tbody = document.getElementById('stock-body');
   const filter = document.getElementById('stock-search').value.trim().toLowerCase();
-  
+
   let totalItems = 0, totalValue = 0;
 
   const codesCommandes = new Set();
@@ -1023,33 +1023,32 @@ function renderStock() {
     });
   });
 
-  let fullList = state.produits.filter(p => !filter || p.codeBarre.toLowerCase().includes(filter) || (p.designation || '').toLowerCase().includes(filter) || (p.fournisseur || '').toLowerCase().includes(filter)).sort((a,b) => (a.designation||'').localeCompare(b.designation||''));  if (stockFiltre !== 'tous') fullList = fullList.filter(p => String(p.type || '').toLowerCase() === stockFiltre);
+  let fullList = state.produits.filter(p => !filter || p.codeBarre.toLowerCase().includes(filter) || (p.designation || '').toLowerCase().includes(filter) || (p.fournisseur || '').toLowerCase().includes(filter)).sort((a,b) => (a.designation||'').localeCompare(b.designation||''));
+  if (stockFiltre !== 'tous') fullList = fullList.filter(p => String(p.type || '').toLowerCase() === stockFiltre);
 
   fullList.forEach(p => {
     totalItems += p.qte;
-    totalValue += (p.qte * p.prixAchat);
-       totalValue += (p.qte * prixAff(p.prixAchat));
+    totalValue += (p.qte * prixAff(p.prixAchat));
   });
 
   tbody.innerHTML = fullList.map(p => {
-    const v = p.qte * p.prixAchat;
     const estcommande = codesCommandes.has(String(p.codeBarre));
     const v = p.qte * prixAff(p.prixAchat);
-    
+
     return `<tr class="${p.qte <= p.seuil ? 'row-alert' : ''}">
       <td>
         ${escapeHtml(p.designation)}<br><span class="muted">${escapeHtml(p.codeBarre)}</span>
         ${estcommande ? '<br><span class="badge-commande">📦 Commandé</span>' : ''}
       </td>
       <td>${p.qte}<br><span class="muted">${v.toFixed(2)}€ ${affichagePrix}</span></td>
-            <td><span class="muted">${escapeHtml(p.fournisseur || 'Non défini')}</span><br><span class="muted">${escapeHtml(p.volume || '')}</span></td>
+      <td><span class="muted">${escapeHtml(p.fournisseur || 'Non défini')}</span><br><span class="muted">${escapeHtml(p.volume || '')}</span></td>
       <td>${p.seuil}</td><td>${prixAff(p.prixAchat).toFixed(2)}€</td>
-            <td style="text-align:center; white-space:nowrap;"><button class="btn-small btn-ghost" onclick="addToPanierRapide('${p.codeBarre}')">🛒</button> <button class="btn-small btn-ghost" onclick="openModalNouveau('${p.codeBarre}')">✏️</button></td>
+      <td style="text-align:center; white-space:nowrap;"><button class="btn-small btn-ghost" onclick="addToPanierRapide('${p.codeBarre}')">🛒</button> <button class="btn-small btn-ghost" onclick="openModalNouveau('${p.codeBarre}')">✏️</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" class="muted">Aucun article</td></tr>';
 
   document.getElementById('tot-qty').textContent = `${totalItems} (${fullList.length} fiches)`;
-  document.getElementById('tot-val').textContent = totalValue.toFixed(2) + ' € ' + affichagePrix';
+  document.getElementById('tot-val').textContent = totalValue.toFixed(2) + ' € ' + affichagePrix;
 }
 
 // ================== CALENDRIER DE CONSOMMATION ==================
