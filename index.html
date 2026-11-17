@@ -601,6 +601,16 @@
     </div>
   </div>
 </div>
+ <div class="modal-overlay" id="modal-confirm-casier">
+  <div class="modal-card">
+    <h3>Changer de casier ?</h3>
+    <p id="confirm-casier-txt"></p>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-confirm-casier')">Non</button>
+      <button class="btn-primary" onclick="confirmerChangementCasier()">Oui, changer</button>
+    </div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -938,9 +948,10 @@ async function deleteHistoriqueRow(id) {
     toast('Ligne supprimée ✔'); await loadData();
   } catch (err) { toast('Erreur: ' + err.message); } finally { setGlobalLoading(false); }
 }
-let casierLigne = null;
+
+let casierChoisi = null;
 function renderBoutique() {
-  const b = state.boutique || { enCours: [], nb: 0 };
+  const b = state.boutique || { enCours: [], nb: 0, occupes: [] };
   const badge = document.getElementById('boutique-badge');
   badge.textContent = b.nb > 99 ? '99+' : b.nb;
   badge.classList.toggle('show', b.nb > 0);
@@ -948,24 +959,36 @@ function renderBoutique() {
     b.enCours.map(c => `<div class="cmd-card-item" ${c.locker ? `onclick="ouvrirCasier(${c.ligne})"` : 'style="cursor:default;"'}>
       <div style="font-weight:700; font-size:13px;">${escapeHtml(c.client)}${c.casier ? ` <span style="color:#00a99d;">· casier ${escapeHtml(c.casier)}</span>` : ''}</div>
       <div style="font-size:12px; margin:2px 0;">${escapeHtml(c.articles).replace(/\n/g, '<br>')}</div>
-      <div class="muted">${escapeHtml(c.retrait)}</div>
+      <div class="muted">${escapeHtml(c.retrait)}${c.locker && c.code ? ' · code ' + escapeHtml(c.code) : ''}</div>
     </div>`).join('')
-    || '<p class="muted" style="text-align:center; margin:10px 0;">Aucune commande en cours 🎉</p>';
+    || '<p class="muted" style="text-align:center; margin:10px 0;">Aucune commande 🎉</p>';
 }
 function ouvrirCasier(ligne) {
   const c = state.boutique.enCours.find(x => x.ligne === ligne); if (!c || !c.locker) return;
   casierLigne = ligne;
+  const pris = (state.boutique.occupes || []).filter(o => o.ligne !== ligne).map(o => String(o.casier));
+  const libres = [1,2,3,4,5].filter(n => pris.indexOf(String(n)) < 0);
   document.getElementById('casier-info').textContent = c.client;
-  document.getElementById('casier-grid').innerHTML = [1,2,3,4,5].map(n => `<button class="casier-btn ${String(n) === c.casier ? 'on' : ''}" onclick="choisirCasier(${n})">${n}</button>`).join('');
+  document.getElementById('casier-grid').innerHTML = libres.map(n => `<button class="casier-btn ${String(n) === c.casier ? 'on' : ''}" onclick="choisirCasier(${n})">${n}</button>`).join('') || '<span class="muted">Aucun casier libre</span>';
   showModal('modal-casier');
 }
-async function choisirCasier(n) {
+function choisirCasier(n) {
+  const c = state.boutique.enCours.find(x => x.ligne === casierLigne); if (!c) return;
   closeModal('modal-casier');
+  if (c.casier && String(n) === c.casier) return;
+  casierChoisi = n;
+  if (c.casier) {
+    document.getElementById('confirm-casier-txt').textContent = `Voulez-vous vraiment changer de casier (${c.casier} → ${n}) ? Un nouveau code sera généré.`;
+    showModal('modal-confirm-casier');
+  } else envoyerCasier();
+}
+function confirmerChangementCasier() { closeModal('modal-confirm-casier'); envoyerCasier(); }
+async function envoyerCasier() {
   setGlobalLoading(true);
   try {
-    const res = await apiPost('setCasier', { ligne: casierLigne, casier: n });
+    const res = await apiPost('setCasier', { ligne: casierLigne, casier: casierChoisi });
     if (res.error) throw new Error(res.error);
-    toast('Casier ' + n + ' enregistré ✔');
+    toast('Casier ' + casierChoisi + ' · code ' + res.code);
     await loadData();
   } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
 }
