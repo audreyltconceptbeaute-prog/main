@@ -25,6 +25,10 @@
   .nav-btn[data-mode="commande"].active  { background: #ff9500; color: #fff; transform: translateY(-2px); box-shadow: 0 3px 8px rgba(255,149,0,0.4); }
   .nav-btn[data-mode="analyse"].active   { background: #5856d6; color: #fff; transform: translateY(-2px); box-shadow: 0 3px 8px rgba(88,86,214,0.4); }
   .nav-btn[data-mode="entree"].active    { background: #34c759; color: #fff; transform: translateY(-2px); box-shadow: 0 3px 8px rgba(52,199,89,0.4); }
+ .nav-btn .ic { position: relative; }
+.nav-badge { position: absolute; top: -4px; right: -10px; background: #ff3b30; color: #fff; font-size: 9px; font-weight: 700; min-width: 15px; height: 15px; line-height: 15px; border-radius: 8px; padding: 0 3px; text-align: center; display: none; }
+.nav-badge.show { display: block; }
+.nav-btn[data-mode="boutique"].active { background: #00a99d; color: #fff; transform: translateY(-2px); }
   .nav-btn[data-mode="reception"].active { background: #af52de; color: #fff; transform: translateY(-2px); box-shadow: 0 3px 8px rgba(175,82,222,0.4); }
 
   /* Adaptation stricte du mode stock sans scrollbar horizontale */
@@ -362,6 +366,13 @@
       </div>
     </div>
   </div>
+ <div class="view" id="view-boutique">
+  <div class="view-loading-overlay"><div class="loading-spinner"></div><div class="loading-text">Chargement des données...</div></div>
+  <div class="stock-container">
+    <h2>Boutique — commandes en cours de traitement</h2>
+    <div id="boutique-list" style="flex:1; overflow-y:auto;"></div>
+  </div>
+</div>
 
   <!-- Vue Entrée -->
   <div class="view" id="view-entree">
@@ -385,6 +396,7 @@
   <button class="nav-btn" data-mode="commande" onclick="switchMode('commande')"><span class="ic">🧾</span>Commande</button>
   <button class="nav-btn" data-mode="reception" onclick="switchMode('reception')"><span class="ic">📥</span>Réception</button>
   <button class="nav-btn" data-mode="analyse" onclick="switchMode('analyse')"><span class="ic">📈</span>Analyse</button>
+ <button class="nav-btn" data-mode="boutique" onclick="switchMode('boutique')"><span class="ic">🛍️<span class="nav-badge" id="boutique-badge"></span></span>Boutique</button>
   <button class="nav-btn" data-mode="entree" onclick="switchMode('entree')"><span class="ic">📥</span>Entrée</button>
 </div>
 
@@ -584,7 +596,7 @@
 // ================== CONFIG ==================
 const API_URL = 'https://script.google.com/macros/s/AKfycbxHnFz6sud2ws0Oa5Nv4mORRDgt7ljujj5inZPxRwuwDWp2PEDFzIF8fIE-JxqumWuU/exec';
 
-let state = { produits: [], historique: [], config: {}, brouillons: [], commandesEnCours: [], options: {} };
+let state = { produits: [], historique: [], config: {}, brouillons: [], commandesEnCours: [], options: {}, boutique: { enCours: [], nb: 0 } };
 let panier = [];
 let currentMode = 'entree';
 let dataLoaded = false;
@@ -792,7 +804,8 @@ async function loadData(silent = false) {
       config: data.config || {}, 
             brouillons: data.brouillons || [],
       commandesEnCours: data.commandesEnCours || [],
-      options: data.options || {}
+      options: data.options || {},
+boutique: data.boutique || { enCours: [], nb: 0 }
     };
     dataLoaded = true;
     
@@ -848,7 +861,7 @@ function switchMode(mode) {
 
 function renderAll() {
   renderStock(); renderHistorique('entree'); renderHistorique('sortie');
-  renderSuggestions(); renderManualSelect(); renderConfigForm(); renderPanier(); renderBrouillons();
+  renderSuggestions(); renderManualSelect(); renderConfigForm(); renderPanier(); renderBrouillons();renderBoutique();
   if (currentMode === 'reception') renderCommandesReceptionList();
   if (currentMode === 'analyse') renderAnalyse();
 }
@@ -914,7 +927,15 @@ async function deleteHistoriqueRow(id) {
     toast('Ligne supprimée ✔'); await loadData();
   } catch (err) { toast('Erreur: ' + err.message); } finally { setGlobalLoading(false); }
 }
-
+function renderBoutique() {
+  const b = state.boutique || { enCours: [], nb: 0 };
+  const badge = document.getElementById('boutique-badge');
+  badge.textContent = b.nb > 99 ? '99+' : b.nb;
+  badge.classList.toggle('show', b.nb > 0);
+  document.getElementById('boutique-list').innerHTML = b.error ? `<p class="muted">${escapeHtml(b.error)}</p>` :
+    b.enCours.map(c => `<div class="cmd-card-item" style="cursor:default;">${c.champs.map(([k, v]) => `<div style="font-size:11px;"><span class="muted">${escapeHtml(k)} :</span> ${escapeHtml(v)}</div>`).join('')}</div>`).join('')
+    || '<p class="muted" style="text-align:center;">Aucune commande en cours 🎉</p>';
+}
 // ================== VUE RECEPTION ==================
 function renderCommandesReceptionList() {
   const container = document.getElementById('commandes-cards-container');
