@@ -961,7 +961,7 @@ function renderBoutique() {
       <div style="flex:1; min-width:0;">
         <div style="font-weight:700; font-size:13px;">${escapeHtml(c.client)}</div>
         <div style="font-size:12px; margin:2px 0;">${escapeHtml(c.articles).replace(/\n/g, '<br>')}</div>
-        <div class="muted">${escapeHtml(c.retrait)}${c.locker && c.code ? ' · code ' + escapeHtml(c.code) : ''}</div>
+        <div class="muted">${escapeHtml(c.retrait)}${c.locker && c.code ? ' · code ' + escapeHtml(c.code) + ' · ' + (String(c.verrou).toLowerCase().indexOf('deverr') === 0 || String(c.verrou).toLowerCase().indexOf('déverr') === 0 ? '🔓 déverrouillé' : '🔒 verrouillé') : ''}</div>
       </div>
       ${c.locker && c.casier ? `<div style="flex-shrink:0; width:46px; height:46px; background:#34c759; color:#fff; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800;">${escapeHtml(c.casier)}</div>` : ''}
     </div>`).join('')
@@ -993,7 +993,7 @@ async function envoyerCasier() {
   try {
     const res = await apiPost('setCasier', { ligne: casierLigne, casier: casierChoisi });
     if (res.error) throw new Error(res.error);
-    toast('Casier ' + casierChoisi + ' · code ' + res.code);
+    toast('Casier ' + casierChoisi + ' · code ' + res.code + (res.mail ? ' · mail envoyé ✔' : ' · mail non envoyé (e-mail client manquant ?)'));
     await loadData();
   } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
 }
