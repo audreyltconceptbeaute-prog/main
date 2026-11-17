@@ -953,7 +953,7 @@ function renderBoutique() {
     || '<p class="muted" style="text-align:center; margin:10px 0;">Aucune commande en cours 🎉</p>';
 }
 function ouvrirCasier(ligne) {
-  const c = state.boutique.enCours.find(x => x.ligne === ligne); if (!c) return;
+  const c = state.boutique.enCours.find(x => x.ligne === ligne); if (!c || !c.locker) return;
   casierLigne = ligne;
   document.getElementById('casier-info').textContent = c.client;
   document.getElementById('casier-grid').innerHTML = [1,2,3,4,5].map(n => `<button class="casier-btn ${String(n) === c.casier ? 'on' : ''}" onclick="choisirCasier(${n})">${n}</button>`).join('');
