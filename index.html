@@ -597,8 +597,9 @@
     <p id="casier-info" class="muted"></p>
     <div class="casier-grid" id="casier-grid"></div>
     <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeModal('modal-casier')">Annuler</button>
-    </div>
+  <button class="btn-red" id="btn-liberer-casier" style="display:none; padding:8px; border-radius:8px; border:none; font-weight:600; font-size:13px; flex:1;" onclick="libererCasier()">Supprimer le casier</button>
+  <button class="btn-secondary" onclick="closeModal('modal-casier')">Annuler</button>
+</div>
   </div>
 </div>
  <div class="modal-overlay" id="modal-confirm-casier">
@@ -973,6 +974,7 @@ function ouvrirCasier(ligne) {
   const libres = [1,2,3,4,5].filter(n => pris.indexOf(String(n)) < 0);
   document.getElementById('casier-info').textContent = c.client;
   document.getElementById('casier-grid').innerHTML = libres.map(n => `<button class="casier-btn ${String(n) === c.casier ? 'on' : ''}" onclick="choisirCasier(${n})">${n}</button>`).join('') || '<span class="muted">Aucun casier libre</span>';
+ document.getElementById('btn-liberer-casier').style.display = c.casier ? '' : 'none';
   showModal('modal-casier');
 }
 function choisirCasier(n) {
@@ -992,6 +994,17 @@ async function envoyerCasier() {
     const res = await apiPost('setCasier', { ligne: casierLigne, casier: casierChoisi });
     if (res.error) throw new Error(res.error);
     toast('Casier ' + casierChoisi + ' · code ' + res.code);
+    await loadData();
+  } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
+}
+ async function libererCasier() {
+  if (!confirm('Supprimer le casier et le code de cette commande ?')) return;
+  closeModal('modal-casier');
+  setGlobalLoading(true);
+  try {
+    const res = await apiPost('clearCasier', { ligne: casierLigne });
+    if (res.error) throw new Error(res.error);
+    toast('Casier supprimé ✔');
     await loadData();
   } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
 }
