@@ -993,7 +993,7 @@ async function envoyerCasier() {
   try {
     const res = await apiPost('setCasier', { ligne: casierLigne, casier: casierChoisi });
     if (res.error) throw new Error(res.error);
-    toast('Casier ' + casierChoisi + ' · code ' + res.code + (res.mail ? ' · mail envoyé ✔' : ' · mail non envoyé (e-mail client manquant ?)'));
+    toast('Casier ' + casierChoisi + ' · code ' + res.code + (res.mail ? ' · mail envoyé ✔' : ' · mail non envoyé : ' + (res.mailErr || 'adresse manquante')));
     await loadData();
   } catch (e) { toast('Erreur : ' + e.message); } finally { setGlobalLoading(false); }
 }
