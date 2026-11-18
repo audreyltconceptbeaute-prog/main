@@ -631,9 +631,10 @@
       <button class="btn-small btn-ghost" onclick="closeModal('modal-traitees')">✕ Fermer</button>
     </div>
     <div class="stock-filter" id="traitees-filter" style="margin:8px 0 6px;">
-      <button data-f="magasin" onclick="setTraiteesType('magasin')">En magasin</button>
-      <button data-f="locker" onclick="setTraiteesType('locker')">En locker</button>
-    </div>
+  <button data-f="magasin" onclick="setTraiteesType('magasin')">En magasin</button>
+  <button data-f="locker" onclick="setTraiteesType('locker')">En locker</button>
+  <button data-f="tous" class="on" onclick="setTraiteesType('tous')">Tous</button>
+</div>
     <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-shrink:0;">
       <input type="month" id="traitees-mois" onchange="renderTraitees()" style="flex:1; padding:5px 7px; border-radius:6px; border:1px solid #c6c6c8; font-size:12px;">
       <button class="btn-small btn-ghost" onclick="document.getElementById('traitees-mois').value=''; renderTraitees();">Tous les mois</button>
@@ -1033,8 +1034,8 @@ async function ouvrirTraitees() {
   renderTraitees();
 }
 function setTraiteesType(t) {
-  traiteesType = traiteesType === t ? '' : t;
-  document.querySelectorAll('#traitees-filter button').forEach(b => b.classList.toggle('on', b.dataset.f === traiteesType));
+  traiteesType = t === 'tous' ? '' : t;
+  document.querySelectorAll('#traitees-filter button').forEach(b => b.classList.toggle('on', b.dataset.f === t));
   renderTraitees();
 }
 function renderTraitees() {
